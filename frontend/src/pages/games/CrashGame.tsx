@@ -72,19 +72,20 @@ const CrashGame: React.FC = () => {
     setCanBet(true);
 
     if (result.success && result.data) {
-      const { crashPoint, cashOutAt } = result.data.result;
+      const gameResult = result.data?.result || { crashPoint: 1, cashOutAt: 0 };
+      const { crashPoint, cashOutAt } = gameResult;
       setCurrentMultiplier(crashPoint);
-      setGameResult(result.data.result);
-      setLastWin(result.data.winAmount);
-      updateBalance(result.data.newBalance);
+      setGameResult(gameResult);
+      setLastWin(result.data?.winAmount || 0);
+      updateBalance(result.data?.newBalance || 0);
 
       // Add to history
       setGameHistory(prev => [{
         crashPoint,
         cashOutAt,
         betAmount,
-        winAmount: result.data.winAmount,
-        multiplier: result.data.multiplier,
+        winAmount: result.data?.winAmount || 0,
+        multiplier: result.data?.multiplier || 0,
         timestamp: new Date()
       }, ...prev.slice(0, 9)]);
     }

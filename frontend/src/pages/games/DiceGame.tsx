@@ -3,6 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { gameService } from '../../services/gameService';
 
+interface GameHistory {
+  roll: number;
+  target: number;
+  isOver: boolean;
+  betAmount: number;
+  winAmount: number;
+  multiplier: number;
+  timestamp: Date;
+}
+
 const DiceGame: React.FC = () => {
   const { user, updateBalance } = useAuth();
   const navigate = useNavigate();
@@ -13,7 +23,8 @@ const DiceGame: React.FC = () => {
   const [isRolling, setIsRolling] = useState(false);
   const [lastRoll, setLastRoll] = useState<number | null>(null);
   const [lastWin, setLastWin] = useState<number>(0);
-  const [gameHistory, setGameHistory] = useState<any[]>([]);
+    const [gameHistory, setGameHistory] = useState<GameHistory[]>([]);
+  const [diceResult, setDiceResult] = useState<number>(1);
 
   const minBet = 0.01;
   const maxBet = 50.00;
@@ -44,10 +55,11 @@ const DiceGame: React.FC = () => {
         clearInterval(rollInterval);
         
         if (result.success && result.data) {
-          const { roll } = result.data.result;
-          setLastRoll(roll);
-          setLastWin(result.data.winAmount);
-          updateBalance(result.data.newBalance);
+          const gameResult = result.data?.result || { roll: 1 };
+          const { roll } = gameResult;
+          setDiceResult(roll);
+          setLastWin(result.data?.winAmount || 0);
+          updateBalance(result.data?.newBalance || 0);
           
           // Add to history
           setGameHistory(prev => [{
@@ -55,8 +67,8 @@ const DiceGame: React.FC = () => {
             target,
             isOver,
             betAmount,
-            winAmount: result.data.winAmount,
-            multiplier: result.data.multiplier,
+            winAmount: result.data?.winAmount || 0,
+            multiplier: result.data?.multiplier || 0,
             timestamp: new Date()
           }, ...prev.slice(0, 9)]);
         }

@@ -110,5 +110,5 @@ INSERT INTO games (name, type, min_bet, max_bet, house_edge) VALUES
 
 -- Create demo user (password: demo123) - bcrypt hash for demo123
 INSERT INTO users (username, password_hash, email, balance) VALUES
-('demo', '$2b$10$K8RKHzW.VQKJQr8rKQXjA.4rXWuv4lbKjK9wKGZdMwXB7YQJqnNeO', 'demo@gamblem-fun.com', 1000.00),
-('admin', '$2b$10$K8RKHzW.VQKJQr8rKQXjA.4rXWuv4lbKjK9wKGZdMwXB7YQJqnNeO', 'admin@gamble-fun.com', 10000.00);
+('demo', '$2b$10$Ml4Z1sj0Jdo3p304U0Eqjukau9po71SAUSrrmu/y3FQYGQogtV0Ty', 'demo@gamblem-fun.com', 1000.00),
+('admin', '$2b$10$Ml4Z1sj0Jdo3p304U0Eqjukau9po71SAUSrrmu/y3FQYGQogtV0Ty', 'admin@gamble-fun.com', 10000.00);

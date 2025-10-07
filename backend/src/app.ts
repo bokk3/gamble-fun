@@ -1,6 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+// Casino backend server
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -53,7 +54,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/games', gameRoutes);
-app.use('/api/bets', betRoutes);
+app.use('/api/bet', betRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 
 // Error handling
