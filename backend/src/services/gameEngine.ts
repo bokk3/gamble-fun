@@ -33,27 +33,28 @@ export class ProvablyFairEngine {
     serverSeed: string,
     clientSeed: string,
     nonce: number,
-    betAmount: number
+    betAmount: number,
+    houseEdge: number = 0.03
   ): GameResult {
     const hash = this.generateHash(serverSeed, clientSeed, nonce);
     
-    // Fortune Teller themed symbols with weighted selection
+    // Fortune Teller themed symbols with achievable big wins
     const symbols = ['🔮', '🪬', '🃏', '🧿', '🦉', '⭐', '🌙', '👑', '💎', '💰', '🌟', '🎭', '🎲', 'WILD'];
     const weights = {
-      '🔮': 1,  // Epic - rarest
-      '🪬': 2,
-      '🃏': 2,
-      '🧿': 4,  // Rare
-      '🦉': 4,
-      '⭐': 5,
-      '🌙': 6,
-      '👑': 8,  // Common high
-      '💎': 10,
-      '💰': 12,
-      '🌟': 15, // Common
-      '🎭': 18,
-      '🎲': 20,
-      'WILD': 3 // Special
+      '🔮': 3,  // Epic - rare but achievable (3% chance for big jackpots)
+      '🪬': 4,
+      '🃏': 5,
+      '🧿': 7,  // Rare - better chance for good wins
+      '🦉': 8,
+      '⭐': 10,
+      '🌙': 12,
+      '👑': 15,  // Common high - frequent medium wins
+      '💎': 18,
+      '💰': 20,
+      '🌟': 22, // Common - regular wins
+      '🎭': 25,
+      '🎲': 28,
+      'WILD': 4 // Special - more frequent for bigger wins
     };
 
     // Create weighted symbol array
@@ -101,24 +102,26 @@ export class ProvablyFairEngine {
       [[0,0],[2,1],[0,2],[2,3],[0,4]]  // Lightning
     ];
 
-    // Symbol multipliers (same as frontend)
+    // Symbol multipliers with exciting but balanced payouts
     const getSymbolMultiplier = (symbol: string, count: number): number => {
-      const multipliers: { [key: string]: number[] } = {
-        '🔮': [0, 0, 50, 200, 1000], // Epic
-        '🪬': [0, 0, 25, 100, 500],
-        '🃏': [0, 0, 20, 80, 400],
-        '🧿': [0, 0, 15, 60, 300], // Rare
-        '🦉': [0, 0, 12, 50, 250],
-        '⭐': [0, 0, 10, 40, 200],
-        '🌙': [0, 0, 8, 35, 150],
-        '👑': [0, 0, 6, 25, 100], // Common high
-        '💎': [0, 0, 5, 20, 80],
-        '💰': [0, 0, 4, 15, 60],
-        '🌟': [0, 0, 3, 12, 50], // Common
-        '🎭': [0, 0, 2, 10, 40],
-        '🎲': [0, 0, 2, 8, 30]
+      const baseMultipliers: { [key: string]: number[] } = {
+        '🔮': [0, 0, 15, 75, 300], // Epic - exciting jackpots (300x max)
+        '🪬': [0, 0, 10, 50, 200],
+        '🃏': [0, 0, 8, 35, 150],
+        '🧿': [0, 0, 6, 25, 100], // Rare - good wins
+        '🦉': [0, 0, 5, 20, 80],
+        '⭐': [0, 0, 4, 15, 60],
+        '🌙': [0, 0, 3, 12, 50],
+        '👑': [0, 0, 2.5, 10, 40], // Common high - decent wins
+        '💎': [0, 0, 2, 8, 30],
+        '💰': [0, 0, 1.5, 6, 25],
+        '🌟': [0, 0, 1, 4, 20], // Common - small wins
+        '🎭': [0, 0, 0.8, 3, 15],
+        '🎲': [0, 0, 0.5, 2, 10]
       };
-      return multipliers[symbol]?.[count] || 0;
+      const baseMultiplier = baseMultipliers[symbol]?.[count] || 0;
+      // Light house edge to keep games fair but exciting
+      return Math.floor(baseMultiplier * (1 - houseEdge * 0.2) * 100) / 100;
     };
 
     // Calculate wins on all paylines
@@ -127,39 +130,53 @@ export class ProvablyFairEngine {
 
     paylines.forEach((line, lineIndex) => {
       const lineSymbols = line.map(([row, col]) => reels[col][row]);
-      const cleanSymbols = lineSymbols.map(symbol => symbol === 'WILD' ? 'WILD' : symbol);
       
-      // Count consecutive matching symbols from left
-      let matchCount = 1;
-      let matchSymbol = cleanSymbols[0];
+      // Find the base symbol (first non-wild symbol)
+      let baseSymbol = '';
+      for (const symbol of lineSymbols) {
+        if (symbol !== 'WILD') {
+          baseSymbol = symbol;
+          break;
+        }
+      }
       
-      for (let i = 1; i < cleanSymbols.length; i++) {
-        if (cleanSymbols[i] === matchSymbol || cleanSymbols[i] === 'WILD' || matchSymbol === 'WILD') {
-          if (matchSymbol === 'WILD' && cleanSymbols[i] !== 'WILD') {
-            matchSymbol = cleanSymbols[i];
-          }
+      // If all symbols are wild, treat as highest value symbol
+      if (!baseSymbol) {
+        baseSymbol = '🔮'; // Treat all wilds as epic symbol
+      }
+      
+      // Count consecutive matching symbols from left (with wild substitution)
+      let matchCount = 0;
+      for (let i = 0; i < lineSymbols.length; i++) {
+        if (lineSymbols[i] === baseSymbol || lineSymbols[i] === 'WILD') {
           matchCount++;
         } else {
           break;
         }
       }
       
-      // Check if we have a winning combination (3+ symbols)
-      if (matchCount >= 3 && matchSymbol !== 'WILD') {
-        const baseMultiplier = getSymbolMultiplier(matchSymbol, matchCount);
-        const wildCount = lineSymbols.slice(0, matchCount).filter(s => s === 'WILD').length;
-        const finalMultiplier = baseMultiplier * Math.pow(2, wildCount); // Wild doubles the win
-        const winAmount = betAmount * finalMultiplier;
+      // Check if we have a winning combination (3+ consecutive symbols from left)
+      // Also verify we have a valid base symbol (not just wilds creating fake wins)
+      if (matchCount >= 3 && baseSymbol && baseSymbol !== '') {
+        const baseMultiplier = getSymbolMultiplier(baseSymbol, matchCount);
         
-        wins.push({
-          line: lineIndex,
-          symbols: lineSymbols.slice(0, matchCount),
-          positions: line.slice(0, matchCount),
-          multiplier: finalMultiplier,
-          winAmount
-        });
-        
-        totalWinAmount += winAmount;
+        // Only apply multiplier if it's actually positive (valid symbol)
+        if (baseMultiplier > 0) {
+          const wildCount = lineSymbols.slice(0, matchCount).filter(s => s === 'WILD').length;
+          const finalMultiplier = baseMultiplier * Math.pow(2, wildCount); // Wild doubles the win
+          const winAmount = (betAmount / 10) * finalMultiplier; // Less division for bigger wins
+          
+          wins.push({
+            line: lineIndex,
+            symbol: baseSymbol,
+            symbols: lineSymbols.slice(0, matchCount),
+            positions: line.slice(0, matchCount),
+            multiplier: finalMultiplier,
+            winAmount
+          });
+          
+          totalWinAmount += winAmount;
+        }
       }
     });
 
@@ -328,6 +345,171 @@ export class ProvablyFairEngine {
       isWin,
       multiplier,
       winAmount
+    };
+  }
+
+  static playRoulette(
+    serverSeed: string,
+    clientSeed: string,
+    nonce: number,
+    betAmount: number,
+    bets: { type: string, value: any, amount: number }[]
+  ): GameResult {
+    const hash = this.generateHash(serverSeed, clientSeed, nonce);
+    const random = this.hashToFloat(hash);
+    
+    // European roulette: 0-36 (37 numbers)
+    const winningNumber = Math.floor(random * 37);
+    
+    // Determine color and properties
+    const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+    const isRed = redNumbers.includes(winningNumber);
+    const isBlack = winningNumber !== 0 && !isRed;
+    const isEven = winningNumber !== 0 && winningNumber % 2 === 0;
+    const isOdd = winningNumber !== 0 && winningNumber % 2 === 1;
+    const isLow = winningNumber >= 1 && winningNumber <= 18;
+    const isHigh = winningNumber >= 19 && winningNumber <= 36;
+    
+    // Calculate column and dozen
+    const column = winningNumber === 0 ? 0 : ((winningNumber - 1) % 3) + 1;
+    const dozen = winningNumber === 0 ? 0 : Math.ceil(winningNumber / 12);
+
+    let totalWinAmount = 0;
+    const winningBets: any[] = [];
+
+    // Process each bet
+    bets.forEach(bet => {
+      let isWinning = false;
+      let payout = 0;
+
+      switch (bet.type) {
+        case 'straight': // Single number
+          if (bet.value === winningNumber) {
+            isWinning = true;
+            payout = 35; // 35:1
+          }
+          break;
+          
+        case 'red':
+          if (isRed) {
+            isWinning = true;
+            payout = 1; // 1:1
+          }
+          break;
+          
+        case 'black':
+          if (isBlack) {
+            isWinning = true;
+            payout = 1; // 1:1
+          }
+          break;
+          
+        case 'even':
+          if (isEven) {
+            isWinning = true;
+            payout = 1; // 1:1
+          }
+          break;
+          
+        case 'odd':
+          if (isOdd) {
+            isWinning = true;
+            payout = 1; // 1:1
+          }
+          break;
+          
+        case 'low': // 1-18
+          if (isLow) {
+            isWinning = true;
+            payout = 1; // 1:1
+          }
+          break;
+          
+        case 'high': // 19-36
+          if (isHigh) {
+            isWinning = true;
+            payout = 1; // 1:1
+          }
+          break;
+          
+        case 'dozen': // 1st 12, 2nd 12, 3rd 12
+          if (bet.value === dozen) {
+            isWinning = true;
+            payout = 2; // 2:1
+          }
+          break;
+          
+        case 'column': // Column 1, 2, or 3
+          if (bet.value === column) {
+            isWinning = true;
+            payout = 2; // 2:1
+          }
+          break;
+          
+        case 'split': // Two adjacent numbers
+          if (bet.value.includes(winningNumber)) {
+            isWinning = true;
+            payout = 17; // 17:1
+          }
+          break;
+          
+        case 'street': // Three numbers in a row
+          if (bet.value.includes(winningNumber)) {
+            isWinning = true;
+            payout = 11; // 11:1
+          }
+          break;
+          
+        case 'corner': // Four numbers
+          if (bet.value.includes(winningNumber)) {
+            isWinning = true;
+            payout = 8; // 8:1
+          }
+          break;
+          
+        case 'line': // Six numbers (two streets)
+          if (bet.value.includes(winningNumber)) {
+            isWinning = true;
+            payout = 5; // 5:1
+          }
+          break;
+      }
+
+      if (isWinning) {
+        const winAmount = bet.amount * (payout + 1); // Include original bet
+        totalWinAmount += winAmount;
+        winningBets.push({
+          type: bet.type,
+          value: bet.value,
+          amount: bet.amount,
+          payout,
+          winAmount
+        });
+      }
+    });
+
+    const isWin = totalWinAmount > 0;
+    const overallMultiplier = isWin ? totalWinAmount / betAmount : 0;
+
+    return {
+      result: {
+        winningNumber,
+        color: winningNumber === 0 ? 'green' : (isRed ? 'red' : 'black'),
+        isRed,
+        isBlack,
+        isEven,
+        isOdd,
+        isLow,
+        isHigh,
+        column,
+        dozen,
+        winningBets,
+        totalBets: bets.length
+      },
+      hash,
+      isWin,
+      multiplier: overallMultiplier,
+      winAmount: totalWinAmount
     };
   }
 }

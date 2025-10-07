@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { gameService } from '../../services/gameService';
+import { audioService } from '../../services/audioService';
 
 interface GameHistory {
   roll: number;
@@ -34,10 +35,16 @@ const DiceGame: React.FC = () => {
   const multiplier = winChance > 0 ? (99 / winChance) : 0;
 
   const rollDice = async () => {
-    if (isRolling || !user || user.balance < betAmount || winChance <= 1) return;
+    if (isRolling || !user || user.balance < betAmount || winChance <= 1) {
+      audioService.playError();
+      return;
+    }
 
     setIsRolling(true);
     setLastWin(0);
+    
+    // Play dice roll sound
+    audioService.playDiceRoll();
 
     // Animate rolling
     const rollDuration = 2000;
@@ -60,6 +67,11 @@ const DiceGame: React.FC = () => {
           setDiceResult(roll);
           setLastWin(result.data?.winAmount || 0);
           updateBalance(result.data?.newBalance || 0);
+          
+          // Play win sound if applicable
+          if (result.data?.winAmount > 0) {
+            audioService.playSlotWin(result.data.winAmount);
+          }
           
           // Add to history
           setGameHistory(prev => [{

@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import AudioControls from './AudioControls';
+import { audioService } from '../services/audioService';
 
 const Navbar: React.FC = () => {
   const { user, logout, isAuthenticated, isBalanceLoading } = useAuth();
+  const [showAudioControls, setShowAudioControls] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(audioService.getSettings().enabled);
 
   return (
     <nav className="bg-casino-primary border-b border-casino-accent/30">
@@ -27,14 +31,30 @@ const Navbar: React.FC = () => {
                 <span className="text-gray-300">
                   Welcome, {user?.username}!
                 </span>
+                <button
+                  onClick={() => {
+                    audioService.playButtonClick();
+                    setShowAudioControls(true);
+                  }}
+                  className={`text-2xl transition-colors ${
+                    audioEnabled ? 'text-casino-gold hover:text-casino-accent' : 'text-gray-500 hover:text-gray-400'
+                  }`}
+                  title="Audio Settings"
+                >
+                  {audioEnabled ? '🔊' : '🔇'}
+                </button>
                 <Link
                   to="/dashboard"
                   className="text-casino-accent hover:text-casino-gold transition-colors"
+                  onClick={() => audioService.playButtonClick()}
                 >
                   Dashboard
                 </Link>
                 <button
-                  onClick={logout}
+                  onClick={() => {
+                    audioService.playButtonClick();
+                    logout();
+                  }}
                   className="text-red-400 hover:text-red-300 transition-colors"
                 >
                   Logout
@@ -59,6 +79,14 @@ const Navbar: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      <AudioControls 
+        isOpen={showAudioControls} 
+        onClose={() => {
+          setShowAudioControls(false);
+          setAudioEnabled(audioService.getSettings().enabled);
+        }} 
+      />
     </nav>
   );
 };

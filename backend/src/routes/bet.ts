@@ -44,7 +44,7 @@ router.post('/place', authenticateToken, async (req: AuthenticatedRequest, res: 
 
     // Get game details
     const games = await executeQuery(
-      'SELECT id, name, type, min_bet, max_bet FROM games WHERE id = ? AND is_active = TRUE',
+      'SELECT id, name, type, min_bet, max_bet, house_edge FROM games WHERE id = ? AND is_active = TRUE',
       [gameId]
     );
 
@@ -57,6 +57,7 @@ router.post('/place', authenticateToken, async (req: AuthenticatedRequest, res: 
     }
 
     const game = games[0];
+    const houseEdge = parseFloat(game.house_edge);
     if (betAmount < parseFloat(game.min_bet) || betAmount > parseFloat(game.max_bet)) {
       res.status(400).json({
         success: false,
@@ -73,7 +74,7 @@ router.post('/place', authenticateToken, async (req: AuthenticatedRequest, res: 
     let gameResult;
     switch (game.type) {
       case 'slots':
-        gameResult = ProvablyFairEngine.playSlots(serverSeed, clientSeed, nonce, betAmount);
+        gameResult = ProvablyFairEngine.playSlots(serverSeed, clientSeed, nonce, betAmount, houseEdge);
         break;
       case 'dice':
         const { target = 50, isOver = true } = gameData || {};
@@ -86,6 +87,10 @@ router.post('/place', authenticateToken, async (req: AuthenticatedRequest, res: 
       case 'blackjack':
         gameResult = ProvablyFairEngine.playBlackjack(serverSeed, clientSeed, nonce, betAmount);
         break;
+      case 'roulette':
+        const { bets = [] } = gameData || {};
+        gameResult = ProvablyFairEngine.playRoulette(serverSeed, clientSeed, nonce, betAmount, bets);
+        break;
       default:
         res.status(400).json({
           success: false,
@@ -96,12 +101,14 @@ router.post('/place', authenticateToken, async (req: AuthenticatedRequest, res: 
 
     const newBalance = currentBalance - betAmount + gameResult.winAmount;
 
-    // Execute transaction
+    // Execute transaction with proper logging
     const queries = [
+      // Update user balance
       {
         query: 'UPDATE users SET balance = ? WHERE id = ?',
         params: [newBalance, userId]
       },
+      // Insert bet record
       {
         query: `INSERT INTO bets (user_id, game_id, bet_amount, win_amount, multiplier, game_data, 
                 server_seed, client_seed, nonce, result_hash, is_win) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -110,14 +117,35 @@ router.post('/place', authenticateToken, async (req: AuthenticatedRequest, res: 
           JSON.stringify({ ...gameData, result: gameResult.result }),
           serverSeed, clientSeed, nonce, gameResult.hash, gameResult.isWin
         ]
+      },
+      // Log bet transaction
+      {
+        query: `INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, description) 
+                VALUES (?, 'bet', ?, ?, ?, ?)`,
+        params: [
+          userId, -betAmount, currentBalance, currentBalance - betAmount, 
+          `Bet placed on ${game.name} - Amount: $${betAmount}`
+        ]
       }
     ];
 
     if (gameResult.isWin) {
-      queries.push({
-        query: 'UPDATE users SET total_won = total_won + ? WHERE id = ?',
-        params: [gameResult.winAmount, userId]
-      });
+      queries.push(
+        // Update total won
+        {
+          query: 'UPDATE users SET total_won = total_won + ? WHERE id = ?',
+          params: [gameResult.winAmount, userId]
+        },
+        // Log win transaction
+        {
+          query: `INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, description) 
+                  VALUES (?, 'win', ?, ?, ?, ?)`,
+          params: [
+            userId, gameResult.winAmount, currentBalance - betAmount, newBalance,
+            `Win on ${game.name} - Multiplier: ${gameResult.multiplier}x, Amount: $${gameResult.winAmount}`
+          ]
+        }
+      );
     } else {
       queries.push({
         query: 'UPDATE users SET total_lost = total_lost + ? WHERE id = ?',

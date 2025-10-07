@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { gameService } from '../../services/gameService';
+import { audioService } from '../../services/audioService';
 
 interface GameHistoryItem {
   reels: string[][];
@@ -170,6 +171,7 @@ const SlotsGame: React.FC = () => {
     if (isSpinning) return;
     const newBet = Math.max(minBet, Math.min(maxBet, betAmount + change));
     setBetAmount(Number(newBet.toFixed(2)));
+    audioService.playBetPlace();
   };
 
   // Enhanced weighted random symbol selection
@@ -277,6 +279,7 @@ const SlotsGame: React.FC = () => {
     if (isSpinning || !user || user.balance < betAmount) {
       setMessage("Insufficient credits! The spirits require payment...");
       setMessageType("lose");
+      audioService.playError();
       return;
     }
 
@@ -285,6 +288,9 @@ const SlotsGame: React.FC = () => {
     setShowWinAnimation(false);
     setMessage(mysticalMessages[Math.floor(Math.random() * mysticalMessages.length)]);
     setMessageType("");
+    
+    // Play spinning sound
+    audioService.playSlotSpin();
 
     // Enhanced spinning animation
     const spinDuration = 3500;
@@ -303,10 +309,10 @@ const SlotsGame: React.FC = () => {
         const wins = checkWins(finalReels);
         const bonusFeatures = checkBonusFeatures(finalReels);
         
-        // Use server's win amount if available, otherwise fallback to client calculation
+        // ALWAYS use server's win amount for accurate balance - never trust client calculation
         const serverWinAmount = result.success && result.data ? result.data.winAmount : 0;
         const clientWinAmount = wins.reduce((sum, win) => sum + win.winAmount, 0);
-        const totalWinAmount = serverWinAmount > 0 ? serverWinAmount : clientWinAmount;
+        const totalWinAmount = serverWinAmount; // Use server amount only for display and balance
         
         console.log('Win amounts:', {
           serverWinAmount,
@@ -315,6 +321,15 @@ const SlotsGame: React.FC = () => {
           serverBalance: result.data?.newBalance,
           currentBalance: user?.balance
         });
+
+        // Warn about calculation mismatches (for debugging)
+        if (Math.abs(serverWinAmount - clientWinAmount) > 0.01 && clientWinAmount > 0) {
+          console.warn('⚠️ PAYOUT MISMATCH!', {
+            server: serverWinAmount,
+            client: clientWinAmount,
+            difference: Math.abs(serverWinAmount - clientWinAmount)
+          });
+        }
         
         setReels(finalReels);
         setWinLines(wins);
@@ -335,12 +350,15 @@ const SlotsGame: React.FC = () => {
           if (totalWinAmount >= betAmount * 50) {
             setMessage(`🌟 MEGA WIN! 🌟 The cosmic forces bestow $${totalWinAmount.toFixed(2)}!`);
             setMessageType("mega-win");
+            audioService.playJackpot();
           } else if (totalWinAmount >= betAmount * 20) {
             setMessage(`💫 BIG WIN! 💫 The spirits reward you with $${totalWinAmount.toFixed(2)}!`);
             setMessageType("big-win");
+            audioService.playBigWin();
           } else {
             setMessage(`🔮 Mystical victory! You've won $${totalWinAmount.toFixed(2)}! 🔮`);
             setMessageType("win");
+            audioService.playSmallWin();
           }
         } else {
           setMessage("The spirits test your resolve... The prophecy awaits!");
@@ -420,7 +438,10 @@ const SlotsGame: React.FC = () => {
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-green-400 border-t-transparent"></div>
               )}
               <button
-                onClick={refreshBalance}
+                onClick={() => {
+                  audioService.playButtonClick();
+                  refreshBalance();
+                }}
                 className="text-green-400 hover:text-green-300 transition-colors"
                 title="Refresh Balance"
               >

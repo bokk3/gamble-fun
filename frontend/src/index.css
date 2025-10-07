@@ -62,6 +62,26 @@ body {
   animation: pulse 0.5s ease-in-out 3;
 }
 
+@keyframes glow {
+  from {
+    box-shadow: 0 0 20px #e94560;
+  }
+  to {
+    box-shadow: 0 0 30px #e94560, 0 0 40px #e94560;
+  }
+}
+
+@keyframes slotSpin {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-100px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .casino-card {
@@ -89,4 +109,37 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #d63447;
+}
+
+/* Audio slider styling */
+.slider {
+  background: linear-gradient(to right, #fbbf24, #f59e0b);
+  outline: none;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.slider:hover {
+  opacity: 1;
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fbbf24;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fbbf24;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
 }
