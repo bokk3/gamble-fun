@@ -1,0 +1,34 @@
+{
+  "name": "gamble-fun",
+  "version": "1.0.0",
+  "description": "A web-based casino featuring funny, interactive gambling games",
+  "main": "index.js",
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "dev:down": "docker-compose down -v",
+    "build": "docker-compose -f docker-compose.prod.yml build",
+    "start": "docker-compose -f docker-compose.prod.yml up",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint:backend": "cd backend && npm run lint",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "cd frontend && npm run test",
+    "test:backend": "cd backend && npm run test"
+  },
+  "keywords": [
+    "casino",
+    "gambling",
+    "games",
+    "react",
+    "nodejs",
+    "websockets"
+  ],
+  "author": "Gamble Fun Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

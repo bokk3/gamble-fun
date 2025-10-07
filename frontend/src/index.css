@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;500;700&display=swap');
+
+body {
+  margin: 0;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  min-height: 100vh;
+}
+
+.casino-font {
+  font-family: 'Orbitron', monospace;
+}
+
+.casino-card {
+  @apply bg-gradient-to-br from-casino-secondary to-casino-primary border border-casino-accent/20 rounded-xl shadow-2xl;
+}
+
+.casino-button {
+  @apply bg-gradient-to-r from-casino-accent to-red-600 hover:from-red-600 hover:to-casino-accent text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg;
+}
+
+.casino-button-secondary {
+  @apply bg-gradient-to-r from-casino-green to-green-600 hover:from-green-600 hover:to-casino-green text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg;
+}
+
+.casino-input {
+  @apply bg-casino-secondary border border-casino-accent/30 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-casino-accent focus:border-transparent;
+}
+
+.slot-reel {
+  @apply bg-gradient-to-b from-gray-800 to-gray-900 border-2 border-casino-gold rounded-lg p-4 text-center;
+}
+
+.dice-face {
+  @apply w-16 h-16 bg-white rounded-lg shadow-lg flex items-center justify-center text-2xl font-bold text-gray-800 border-2 border-gray-300;
+}
+
+.roulette-wheel {
+  @apply w-64 h-64 rounded-full bg-gradient-to-r from-red-600 via-black to-red-600 border-8 border-casino-gold shadow-2xl;
+}
+
+.crash-graph {
+  @apply bg-gradient-to-br from-casino-primary to-casino-secondary rounded-lg border border-casino-accent/30;
+}
+
+/* Animations */
+.winning-glow {
+  animation: glow 1s ease-in-out infinite alternate;
+}
+
+.slot-spinning {
+  animation: slotSpin 2s ease-in-out;
+}
+
+.pulse-win {
+  animation: pulse 0.5s ease-in-out 3;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .casino-card {
+    @apply mx-2;
+  }
+  
+  .roulette-wheel {
+    @apply w-48 h-48;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e94560;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d63447;
+}

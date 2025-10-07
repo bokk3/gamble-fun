@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortune Teller Slots</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: flex;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: linear-gradient(145deg, #2d1b69, #1e1e3f);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            border: 2px solid #4a4a8a;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal-title {
+            font-size: 2rem;
+            background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 30px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #4a4a8a;
+            border-radius: 8px;
+            background: rgba(26, 26, 46, 0.8);
+            color: #fff;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #ffd700;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 25px;
+        }
+
+        .modal-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .login-btn {
+            background: linear-gradient(145deg, #4caf50, #45a049);
+            color: white;
+        }
+
+        .login-btn:hover {
+            background: linear-gradient(145deg, #5cbf60, #4caf50);
+            transform: translateY(-2px);
+        }
+
+        .register-btn {
+            background: linear-gradient(145deg, #2196f3, #1976d2);
+            color: white;
+        }
+
+        .register-btn:hover {
+            background: linear-gradient(145deg, #42a5f5, #2196f3);
+            transform: translateY(-2px);
+        }
+
+        .auth-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .auth-message.success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+            border: 1px solid #4caf50;
+        }
+
+        .auth-message.error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+            border: 1px solid #f44336;
+        }
+
+        /* User Info Bar */
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: linear-gradient(145deg, #1a1a3a, #2a2a5a);
+            border-radius: 10px;
+            border: 1px solid #4a4a8a;
+        }
+
+        .welcome-text {
+            font-size: 1.1rem;
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .logout-btn {
+            background: linear-gradient(145deg, #f44336, #d32f2f);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: linear-gradient(145deg, #f57c00, #ef6c00);
+            transform: translateY(-1px);
+        }
+
+        .slot-machine {
+            background: linear-gradient(145deg, #2d1b69, #1e1e3f);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 
+                0 20px 40px rgba(0,0,0,0.3),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            border: 2px solid #4a4a8a;
+            max-width: 600px;
+            width: 95%;
+        }
+
+        .title {
+            text-align: center;
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { filter: drop-shadow(0 0 5px #ffd700); }
+            to { filter: drop-shadow(0 0 20px #ffd700); }
+        }
+
+        .reels-container {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 30px 0;
+            background: #0a0a1a;
+            padding: 20px;
+            border-radius: 15px;
+            border: 3px solid #4a4a8a;
+            overflow-x: auto;
+        }
+
+        .reel {
+            width: 100px;
+            height: 150px;
+            background: linear-gradient(180deg, #1a1a2e, #2d2d5a);
+            border: 2px solid #6a6aaa;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            flex-shrink: 0;
+        }
+
+        .reel-strip {
+            position: absolute;
+            width: 100%;
+            transition: transform 0.1s ease-out;
+        }
+
+        .symbol {
+            width: 100%;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4rem;
+            background: linear-gradient(145deg, #2a2a4a, #3a3a6a);
+            border-bottom: 1px solid #4a4a8a;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .spin-btn {
+            background: linear-gradient(145deg, #ff6b6b, #e55555);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .spin-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px rgba(0,0,0,0.3);
+            background: linear-gradient(145deg, #ff5252, #d32f2f);
+        }
+
+        .spin-btn:active {
+            transform: translateY(0);
+        }
+
+        .spin-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .bet-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .bet-btn {
+            background: linear-gradient(145deg, #4caf50, #45a049);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        .bet-btn:hover {
+            transform: scale(1.1);
+            background: linear-gradient(145deg, #5cbf60, #4caf50);
+        }
+
+        .info-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .info-item {
+            background: linear-gradient(145deg, #1a1a3a, #2a2a5a);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #4a4a8a;
+            text-align: center;
+        }
+
+        .info-label {
+            font-size: 0.9rem;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #ffd700;
+        }
+
+        .message {
+            text-align: center;
+            font-size: 1.1rem;
+            margin: 15px 0;
+            min-height: 30px;
+            font-weight: bold;
+        }
+
+        .win-message {
+            color: #4caf50;
+            animation: pulse 1s ease-in-out;
+        }
+
+        .lose-message {
+            color: #ff6b6b;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes spin {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-100%); }
+        }
+
+        .spinning .reel-strip {
+            animation: spin 0.1s linear infinite;
+        }
+
+        @media (max-width: 480px) {
+            .slot-machine {
+                padding: 20px;
+            }
+            
+            .title {
+                font-size: 2rem;
+            }
+            
+            .reel {
+                width: 70px;
+                height: 105px;
+            }
+            
+            .symbol {
+                height: 105px;
+                font-size: 2.2rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-title">🔮 Enter the Mystical Realm 🔮</h2>
+            <div id="login-form">
+                <div class="form-group">
+                    <label>Username:</label>
+                    <input type="text" id="username-input" placeholder="Enter your mystical name">
+                </div>
+                <div class="form-group">
+                    <label>Password:</label>
+                    <input type="password" id="password-input" placeholder="Enter your secret incantation">
+                </div>
+                <div class="form-buttons">
+                    <button class="modal-btn login-btn" onclick="login()">Login</button>
+                    <button class="modal-btn register-btn" onclick="register()">Register New Oracle</button>
+                </div>
+                <div id="auth-message" class="auth-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="slot-machine" id="game-container" style="display: none;">
+        <div class="user-info">
+            <div class="welcome-text">Welcome, <span id="current-user">Oracle</span>!</div>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        <h1 class="title">🔮 Fortune Teller 🔮</h1>
+        
+        <div class="reels-container">
+            <div class="reel">
+                <div class="reel-strip" id="reel1">
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                    <div class="symbol">⭐</div>
+                    <div class="symbol">🌙</div>
+                    <div class="symbol">🦉</div>
+                    <div class="symbol">🕯️</div>
+                    <div class="symbol">🧿</div>
+                    <div class="symbol">🪬</div>
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                </div>
+            </div>
+            <div class="reel">
+                <div class="reel-strip" id="reel2">
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                    <div class="symbol">⭐</div>
+                    <div class="symbol">🌙</div>
+                    <div class="symbol">🦉</div>
+                    <div class="symbol">🕯️</div>
+                    <div class="symbol">🧿</div>
+                    <div class="symbol">🪬</div>
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                </div>
+            </div>
+            <div class="reel">
+                <div class="reel-strip" id="reel3">
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                    <div class="symbol">⭐</div>
+                    <div class="symbol">🌙</div>
+                    <div class="symbol">🦉</div>
+                    <div class="symbol">🕯️</div>
+                    <div class="symbol">🧿</div>
+                    <div class="symbol">🪬</div>
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                </div>
+            </div>
+            <div class="reel">
+                <div class="reel-strip" id="reel4">
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                    <div class="symbol">⭐</div>
+                    <div class="symbol">🌙</div>
+                    <div class="symbol">🦉</div>
+                    <div class="symbol">🕯️</div>
+                    <div class="symbol">🧿</div>
+                    <div class="symbol">🪬</div>
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                </div>
+            </div>
+            <div class="reel">
+                <div class="reel-strip" id="reel5">
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                    <div class="symbol">⭐</div>
+                    <div class="symbol">🌙</div>
+                    <div class="symbol">🦉</div>
+                    <div class="symbol">🕯️</div>
+                    <div class="symbol">🧿</div>
+                    <div class="symbol">🪬</div>
+                    <div class="symbol">🔮</div>
+                    <div class="symbol">🃏</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="bet-controls">
+                <button class="bet-btn" onclick="adjustBet(-1)">−</button>
+                <span style="margin: 0 10px; font-weight: bold;">Bet: <span id="bet-amount">25</span></span>
+                <button class="bet-btn" onclick="adjustBet(1)">+</button>
+            </div>
+            
+            <button class="spin-btn" id="spin-button" onclick="spin()">
+                SPIN THE WHEEL OF FATE
+            </button>
+        </div>
+
+        <div class="info-panel">
+            <div class="info-item">
+                <div class="info-label">Credits</div>
+                <div class="info-value" id="credits">0</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Last Win</div>
+                <div class="info-value" id="last-win">0</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Total Won</div>
+                <div class="info-value" id="total-won">0</div>
+            </div>
+        </div>
+
+        <div class="message" id="message">The spirits await your fortune...</div>
+    </div>
+
+    <script>
+        class UserManager {
+            constructor() {
+                this.users = new Map();
+                this.currentUser = null;
+                this.initializeDefaultUsers();
+            }
+
+            initializeDefaultUsers() {
+                this.users.set('demo', {
+                    password: 'demo',
+                    credits: 5000,
+                    totalWon: 0,
+                    gamesPlayed: 0,
+                    lastLogin: new Date()
+                });
+                this.users.set('oracle', {
+                    password: 'mystic123',
+                    credits: 10000,
+                    totalWon: 0,
+                    gamesPlayed: 0,
+                    lastLogin: new Date()
+                });
+            }
+
+            register(username, password) {
+                if (!username || !password) {
+                    return { success: false, message: 'Username and password are required!' };
+                }
+                if (username.length < 3) {
+                    return { success: false, message: 'Username must be at least 3 characters!' };
+                }
+                if (password.length < 4) {
+                    return { success: false, message: 'Password must be at least 4 characters!' };
+                }
+                if (this.users.has(username.toLowerCase())) {
+                    return { success: false, message: 'Oracle name already taken by another mystic!' };
+                }
+
+                this.users.set(username.toLowerCase(), {
+                    password: password,
+                    credits: 2500,
+                    totalWon: 0,
+                    gamesPlayed: 0,
+                    registeredAt: new Date(),
+                    lastLogin: new Date()
+                });
+
+                return { success: true, message: 'Welcome to the mystical realm, new Oracle!' };
+            }
+
+            login(username, password) {
+                if (!username || !password) {
+                    return { success: false, message: 'Please enter both username and password!' };
+                }
+                const user = this.users.get(username.toLowerCase());
+                if (!user) {
+                    return { success: false, message: 'Oracle not found in the mystical records!' };
+                }
+                if (user.password !== password) {
+                    return { success: false, message: 'Incorrect incantation! Try again.' };
+                }
+
+                this.currentUser = username.toLowerCase();
+                user.lastLogin = new Date();
+                return { success: true, message: 'Welcome back, Oracle!' };
+            }
+
+            getCurrentUser() {
+                if (!this.currentUser) return null;
+                return this.users.get(this.currentUser);
+            }
+
+            updateUserCredits(credits) {
+                if (!this.currentUser) return false;
+                const user = this.users.get(this.currentUser);
+                if (user) {
+                    user.credits = credits;
+                    return true;
+                }
+                return false;
+            }
+
+            updateUserStats(totalWon, gamesPlayed) {
+                if (!this.currentUser) return false;
+                const user = this.users.get(this.currentUser);
+                if (user) {
+                    user.totalWon = totalWon;
+                    user.gamesPlayed = gamesPlayed;
+                    return true;
+                }
+                return false;
+            }
+
+            logout() {
+                this.currentUser = null;
+            }
+
+            getCurrentUsername() {
+                return this.currentUser;
+            }
+        }
+
+        class FortuneSlotMachine {
+            constructor() {
+                this.userManager = new UserManager();
+                this.symbols = ['🔮', '🃏', '⭐', '🌙', '🦉', '🕯️', '🧿', '🪬'];
+                this.payouts = {
+                    '🔮🔮🔮🔮🔮': 1000, '🃏🃏🃏🃏🃏': 500, '⭐⭐⭐⭐⭐': 300,
+                    '🌙🌙🌙🌙🌙': 250, '🦉🦉🦉🦉🦉': 200, '🕯️🕯️🕯️🕯️🕯️': 150,
+                    '🧿🧿🧿🧿🧿': 400, '🪬🪬🪬🪬🪬': 600,
+                    '🔮🔮🔮🔮': 200, '🃏🃏🃏🃏': 150, '⭐⭐⭐⭐': 100,
+                    '🌙🌙🌙🌙': 80, '🦉🦉🦉🦉': 70, '🕯️🕯️🕯️🕯️': 60,
+                    '🧿🧿🧿🧿': 120, '🪬🪬🪬🪬': 180,
+                    '🔮🔮🔮': 50, '🃏🃏🃏': 40, '⭐⭐⭐': 30,
+                    '🌙🌙🌙': 25, '🦉🦉🦉': 20, '🕯️🕯️🕯️': 15,
+                    '🧿🧿🧿': 35, '🪬🪬🪬': 45
+                };
+                
+                this.gameState = {
+                    credits: 0,
+                    bet: 25,
+                    totalWon: 0,
+                    gamesPlayed: 0,
+                    isSpinning: false
+                };
+
+                this.mysticalMessages = [
+                    "The ancient spirits whisper secrets...",
+                    "Five realms of mystical power await...",
+                    "The cosmic alignment grows stronger...",
+                    "Sacred energies flow through the reels...",
+                    "Divine protection surrounds your fortune...",
+                    "The evil eye watches over your luck...",
+                    "Celestial guardians guide your destiny...",
+                    "Ancient wisdom reveals hidden treasures...",
+                    "The mystic hamsa blesses your path...",
+                    "Spiritual forces converge upon you..."
+                ];
+
+                this.showLoginModal();
+            }
+
+            showLoginModal() {
+                document.getElementById('login-modal').style.display = 'flex';
+                document.getElementById('game-container').style.display = 'none';
+            }
+
+            hideLoginModal() {
+                document.getElementById('login-modal').style.display = 'none';
+                document.getElementById('game-container').style.display = 'block';
+                this.loadUserData();
+                this.initializeReels();
+                this.updateDisplay();
+            }
+
+            loadUserData() {
+                const user = this.userManager.getCurrentUser();
+                if (user) {
+                    this.gameState.credits = user.credits;
+                    this.gameState.totalWon = user.totalWon;
+                    this.gameState.gamesPlayed = user.gamesPlayed;
+                    document.getElementById('current-user').textContent = this.userManager.getCurrentUsername();
+                }
+            }
+
+            saveUserData() {
+                if (this.userManager && this.userManager.currentUser) {
+                    this.userManager.updateUserCredits(this.gameState.credits);
+                    this.userManager.updateUserStats(this.gameState.totalWon, this.gameState.gamesPlayed);
+                }
+            }
+
+            initializeReels() {
+                for (let i = 1; i <= 5; i++) {
+                    const reelStrip = document.getElementById(`reel${i}`);
+                    if (reelStrip) {
+                        reelStrip.style.transform = `translateY(${-Math.floor(Math.random() * 8) * 150}px)`;
+                    }
+                }
+            }
+
+            adjustBet(change) {
+                if (this.gameState.isSpinning) return;
+                this.gameState.bet = Math.max(5, Math.min(200, this.gameState.bet + change * 5));
+                this.updateDisplay();
+            }
+
+            spin() {
+                if (this.gameState.isSpinning || this.gameState.credits < this.gameState.bet) {
+                    this.showMessage("Insufficient credits! The spirits require payment...", 'lose-message');
+                    return;
+                }
+
+                this.gameState.isSpinning = true;
+                this.gameState.credits -= this.gameState.bet;
+                this.gameState.gamesPlayed++;
+                
+                const spinButton = document.getElementById('spin-button');
+                if (spinButton) {
+                    spinButton.disabled = true;
+                    spinButton.textContent = 'CHANNELING SPIRITS...';
+                }
+
+                this.showMessage(this.mysticalMessages[Math.floor(Math.random() * this.mysticalMessages.length)]);
+
+                // Add spinning animation with staggered stops
+                for (let i = 1; i <= 5; i++) {
+                    const reel = document.querySelector(`.reel:nth-child(${i})`);
+                    if (reel) {
+                        reel.classList.add('spinning');
+                        
+                        setTimeout(() => {
+                            reel.classList.remove('spinning');
+                            const symbolIndex = Math.floor(Math.random() * this.symbols.length);
+                            const reelStrip = document.getElementById(`reel${i}`);
+                            if (reelStrip) {
+                                reelStrip.style.transform = `translateY(${-symbolIndex * 150}px)`;
+                            }
+                        }, 1500 + ((i-1) * 300));
+                    }
+                }
+
+                setTimeout(() => {
+                    this.checkResults();
+                }, 3000);
+
+                this.updateDisplay();
+                this.saveUserData();
+            }
+
+            checkResults() {
+                const results = [];
+                for (let i = 1; i <= 5; i++) {
+                    const reelStrip = document.getElementById(`reel${i}`);
+                    if (reelStrip) {
+                        const transform = reelStrip.style.transform;
+                        
+                        let translateY = 0;
+                        if (transform && transform.includes('translateY')) {
+                            const match = transform.match(/translateY\((-?\d+)px\)/);
+                            if (match) {
+                                translateY = parseInt(match[1]);
+                            }
+                        }
+                        
+                        const symbolIndex = Math.abs(translateY) / 150;
+                        const clampedIndex = Math.floor(symbolIndex) % this.symbols.length;
+                        results.push(this.symbols[clampedIndex]);
+                    } else {
+                        // Fallback to random symbol if element not found
+                        results.push(this.symbols[Math.floor(Math.random() * this.symbols.length)]);
+                    }
+                }
+
+                const win = this.checkWin(results);
+                if (win > 0) {
+                    this.gameState.credits += win;
+                    this.gameState.totalWon += win;
+                    const lastWinEl = document.getElementById('last-win');
+                    if (lastWinEl) lastWinEl.textContent = win;
+                    
+                    if (win >= 500) {
+                        this.showMessage(`🌟 MYSTICAL JACKPOT! 🌟 The ancient powers bestow ${win} credits! 🌟`, 'win-message');
+                    } else if (win >= 100) {
+                        this.showMessage(`✨ DIVINE BLESSING! ✨ The spirits reward you with ${win} credits!`, 'win-message');
+                    } else {
+                        this.showMessage(`🔮 Mystical win! The oracle grants you ${win} credits! 🔮`, 'win-message');
+                    }
+                } else {
+                    const lastWinEl = document.getElementById('last-win');
+                    if (lastWinEl) lastWinEl.textContent = '0';
+                    this.showMessage("The spirits test your resolve... The prophecy awaits!", 'lose-message');
+                }
+
+                this.gameState.isSpinning = false;
+                const spinButton = document.getElementById('spin-button');
+                if (spinButton) {
+                    spinButton.disabled = false;
+                    spinButton.textContent = 'SPIN THE WHEEL OF FATE';
+                }
+
+                this.updateDisplay();
+                this.saveUserData();
+            }
+
+            checkWin(results) {
+                const symbolCounts = {};
+                results.forEach(symbol => {
+                    symbolCounts[symbol] = (symbolCounts[symbol] || 0) + 1;
+                });
+
+                let maxCount = 0;
+                let winningSymbol = '';
+                
+                for (const symbol in symbolCounts) {
+                    if (symbolCounts[symbol] > maxCount) {
+                        maxCount = symbolCounts[symbol];
+                        winningSymbol = symbol;
+                    }
+                }
+
+                if (maxCount >= 3) {
+                    const winPattern = winningSymbol.repeat(maxCount);
+                    if (this.payouts[winPattern]) {
+                        return Math.floor(this.payouts[winPattern] * this.gameState.bet / 25);
+                    }
+                }
+
+                return 0;
+            }
+
+            showMessage(text, className = '') {
+                const messageEl = document.getElementById('message');
+                if (messageEl) {
+                    messageEl.textContent = text;
+                    messageEl.className = `message ${className}`;
+                }
+            }
+
+            updateDisplay() {
+                const creditsEl = document.getElementById('credits');
+                const betEl = document.getElementById('bet-amount');
+                const totalWonEl = document.getElementById('total-won');
+                
+                if (creditsEl) creditsEl.textContent = this.gameState.credits || 0;
+                if (betEl) betEl.textContent = this.gameState.bet || 25;
+                if (totalWonEl) totalWonEl.textContent = this.gameState.totalWon || 0;
+            }
+        }
+
+        // Global functions
+        function login() {
+            const username = document.getElementById('username-input').value.trim();
+            const password = document.getElementById('password-input').value;
+            
+            const result = game.userManager.login(username, password);
+            showAuthMessage(result.message, result.success ? 'success' : 'error');
+            
+            if (result.success) {
+                setTimeout(() => game.hideLoginModal(), 1000);
+            }
+        }
+
+        function register() {
+            const username = document.getElementById('username-input').value.trim();
+            const password = document.getElementById('password-input').value;
+            
+            const result = game.userManager.register(username, password);
+            showAuthMessage(result.message, result.success ? 'success' : 'error');
+            
+            if (result.success) {
+                setTimeout(() => {
+                    game.userManager.login(username, password);
+                    game.hideLoginModal();
+                }, 1500);
+            }
+        }
+
+        function logout() {
+            game.userManager.logout();
+            game.showLoginModal();
+            document.getElementById('username-input').value = '';
+            document.getElementById('password-input').value = '';
+            document.getElementById('auth-message').textContent = '';
+        }
+
+        function showAuthMessage(message, type) {
+            const messageEl = document.getElementById('auth-message');
+            if (messageEl) {
+                messageEl.textContent = message;
+                messageEl.className = `auth-message ${type}`;
+            }
+        }
+
+        function adjustBet(change) {
+            game.adjustBet(change);
+        }
+
+        function spin() {
+            game.spin();
+        }
+
+        // Initialize
+        const game = new FortuneSlotMachine();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const passwordInput = document.getElementById('password-input');
+            if (passwordInput) {
+                passwordInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') login();
+                });
+            }
+
+            setInterval(() => {
+                if (!game.gameState.isSpinning && game.userManager.currentUser) {
+                    const messages = game.mysticalMessages;
+                    const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+                    const messageEl = document.getElementById('message');
+                    if (messageEl && messageEl.textContent.includes("spirits await")) {
+                        game.showMessage(randomMessage);
+                    }
+                }
+            }, 10000);
+        });
+    </script>
+</body>
+</html>
