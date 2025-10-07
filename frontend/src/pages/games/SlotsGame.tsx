@@ -30,8 +30,31 @@ interface SpinResult {
 }
 
 const SlotsGame: React.FC = () => {
-  const { user, updateBalance } = useAuth();
+  const { user, updateBalance, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  
+  // Check authentication and redirect if needed
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      console.log('Authentication check failed, redirecting to home...');
+      navigate('/');
+      return;
+    }
+    
+    // Test token validity
+    const token = localStorage.getItem('casino_token');
+    if (!token) {
+      console.log('No token found, redirecting to home...');
+      navigate('/');
+      return;
+    }
+    
+    console.log('Authentication check passed:', {
+      user: user.username,
+      balance: user.balance,
+      tokenExists: !!token
+    });
+  }, [isAuthenticated, user, navigate]);
   
   const [betAmount, setBetAmount] = useState(25);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -338,10 +361,11 @@ const SlotsGame: React.FC = () => {
     }
   };
 
-  const getWinType = (reels: string[]) => {
+  const getWinType = (reels: string[][]) => {
+    const allSymbols = reels.flat();
     const counts: { [key: string]: number } = {};
-    reels.forEach(reel => {
-      counts[reel] = (counts[reel] || 0) + 1;
+    allSymbols.forEach(symbol => {
+      counts[symbol] = (counts[symbol] || 0) + 1;
     });
 
     const maxCount = Math.max(...Object.values(counts));
@@ -555,7 +579,7 @@ const SlotsGame: React.FC = () => {
           <div className="bg-gradient-to-b from-purple-900 to-indigo-900 rounded-xl border-2 border-purple-500 p-6">
             <h3 className="text-2xl font-bold text-yellow-400 mb-6 text-center">💰 Sacred Payouts 💰</h3>
             <div className="space-y-3">
-              {symbols.map((symbol, index) => (
+              {allSymbols.map((symbol: string, index: number) => (
                 <div key={index} className="flex justify-between items-center text-white bg-black bg-opacity-30 rounded-lg p-3 border border-purple-700">
                   <div className="flex items-center space-x-2">
                     <span className="text-3xl">{symbol}</span>
@@ -588,9 +612,11 @@ const SlotsGame: React.FC = () => {
                 gameHistory.map((game, index) => (
                   <div key={index} className="flex justify-between items-center bg-black bg-opacity-50 rounded-lg p-4 border border-purple-700">
                     <div className="flex items-center space-x-1">
-                      {game.reels.map((reel: string, idx: number) => (
-                        <span key={idx} className="text-2xl">{reel}</span>
-                      ))}
+                      {game.reels.map((reel: string[], idx: number) => 
+                        reel.map((symbol: string, symbolIdx: number) => (
+                          <span key={`${idx}-${symbolIdx}`} className="text-2xl">{symbol}</span>
+                        ))
+                      )}
                     </div>
                     <div className="text-right">
                       <div className={`font-bold text-lg ${game.winAmount > 0 ? 'text-green-400' : 'text-red-400'}`}>

@@ -26,7 +26,8 @@ export interface BetResult {
 
 class GameService {
   private getAuthHeaders() {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('casino_token');
+    console.log('Token from localStorage:', token ? 'Present' : 'Missing');
     return {
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : '',
@@ -61,9 +62,13 @@ class GameService {
 
   async placeBet(gameId: number, betAmount: number, gameData: any = {}): Promise<BetResult> {
     try {
+      const headers = this.getAuthHeaders();
+      console.log('Placing bet with headers:', headers);
+      console.log('Token from localStorage:', localStorage.getItem('casino_token') ? 'EXISTS' : 'MISSING');
+      
       const response = await fetch(`${API_BASE_URL}/bet/place`, {
         method: 'POST',
-        headers: this.getAuthHeaders(),
+        headers,
         body: JSON.stringify({
           gameId,
           betAmount,
@@ -71,7 +76,23 @@ class GameService {
         }),
       });
       
-      return await response.json();
+      console.log('Bet response status:', response.status);
+      
+      if (response.status === 401) {
+        console.error('Unauthorized - token may be invalid or expired');
+        // Clear invalid token
+        localStorage.removeItem('casino_token');
+        localStorage.removeItem('casino_user');
+        return {
+          success: false,
+          message: 'Session expired. Please log in again.',
+        };
+      }
+      
+      const result = await response.json();
+      console.log('Bet response data:', result);
+      
+      return result;
     } catch (error) {
       console.error('Failed to place bet:', error);
       return {
@@ -91,6 +112,26 @@ class GameService {
     } catch (error) {
       console.error('Failed to fetch balance:', error);
       return 0;
+    }
+  }
+
+  async testAuth(): Promise<boolean> {
+    try {
+      const headers = this.getAuthHeaders();
+      console.log('Testing auth with headers:', headers);
+      
+      const response = await fetch(`${API_BASE_URL}/user/profile`, {
+        headers,
+      });
+      
+      console.log('Auth test response status:', response.status);
+      const result = await response.json();
+      console.log('Auth test response:', result);
+      
+      return response.status === 200 && result.success;
+    } catch (error) {
+      console.error('Auth test failed:', error);
+      return false;
     }
   }
 }
