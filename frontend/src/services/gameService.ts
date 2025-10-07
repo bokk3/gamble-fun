@@ -25,6 +25,13 @@ export interface BetResult {
 }
 
 class GameService {
+  private balanceRefreshCallback: (() => Promise<void>) | null = null;
+
+  // Allow setting a callback for balance refresh
+  setBalanceRefreshCallback(callback: () => Promise<void>) {
+    this.balanceRefreshCallback = callback;
+  }
+
   private getAuthHeaders() {
     const token = localStorage.getItem('casino_token');
     console.log('Token from localStorage:', token ? 'Present' : 'Missing');
@@ -91,6 +98,15 @@ class GameService {
       
       const result = await response.json();
       console.log('Bet response data:', result);
+      
+      // Automatically refresh balance after successful bet
+      if (result.success && this.balanceRefreshCallback) {
+        try {
+          await this.balanceRefreshCallback();
+        } catch (error) {
+          console.error('Failed to refresh balance after bet:', error);
+        }
+      }
       
       return result;
     } catch (error) {

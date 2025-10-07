@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { gameService } from '../services/gameService';
 
 interface User {
   id: number;
@@ -13,10 +14,12 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  isBalanceLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<boolean>;
   register: (userData: RegisterData) => Promise<boolean>;
   logout: () => void;
   updateBalance: (newBalance: number) => void;
+  refreshBalance: () => Promise<void>;
 }
 
 interface LoginCredentials {
@@ -48,6 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
 
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -64,6 +68,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
     }
   }, []);
+
+  // Automatic balance refresh every 30 seconds when authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+
+    // Connect gameService to our balance refresh
+    gameService.setBalanceRefreshCallback(refreshBalance);
+
+    const balanceInterval = setInterval(() => {
+      refreshBalance();
+    }, 30000); // 30 seconds
+
+    // Initial balance refresh on authentication
+    refreshBalance();
+
+    return () => clearInterval(balanceInterval);
+  }, [isAuthenticated, token]);
+
+  // Refresh balance when page becomes visible (user returns to tab)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshBalance();
+      }
+    };
+
+    const handleFocus = () => {
+      refreshBalance();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [isAuthenticated]);
 
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
     try {
@@ -138,14 +182,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const refreshBalance = async () => {
+    if (!token || !isAuthenticated) return;
+    
+    setIsBalanceLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/user/balance`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.data.success && user) {
+        const newBalance = response.data.data.balance;
+        console.log('Balance refreshed from server:', newBalance);
+        updateBalance(newBalance);
+      }
+    } catch (error: any) {
+      console.error('Failed to refresh balance:', error);
+      if (error.response?.status === 401) {
+        // Token expired, logout user
+        logout();
+        toast.error('Session expired. Please log in again.');
+      }
+    } finally {
+      setIsBalanceLoading(false);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     token,
     isAuthenticated,
+    isBalanceLoading,
     login,
     register,
     logout,
-    updateBalance
+    updateBalance,
+    refreshBalance
   };
 
   return (

@@ -30,7 +30,7 @@ interface SpinResult {
 }
 
 const SlotsGame: React.FC = () => {
-  const { user, updateBalance, isAuthenticated } = useAuth();
+  const { user, updateBalance, refreshBalance, isAuthenticated, isBalanceLoading } = useAuth();
   const navigate = useNavigate();
   
   // Check authentication and redirect if needed
@@ -298,11 +298,23 @@ const SlotsGame: React.FC = () => {
       setTimeout(() => {
         clearInterval(spinInterval);
         
-        // Generate final result
+        // Generate visual result (for display only)
         const finalReels = generateRandomReels();
         const wins = checkWins(finalReels);
         const bonusFeatures = checkBonusFeatures(finalReels);
-        const totalWinAmount = wins.reduce((sum, win) => sum + win.winAmount, 0);
+        
+        // Use server's win amount if available, otherwise fallback to client calculation
+        const serverWinAmount = result.success && result.data ? result.data.winAmount : 0;
+        const clientWinAmount = wins.reduce((sum, win) => sum + win.winAmount, 0);
+        const totalWinAmount = serverWinAmount > 0 ? serverWinAmount : clientWinAmount;
+        
+        console.log('Win amounts:', {
+          serverWinAmount,
+          clientWinAmount, 
+          totalWinAmount,
+          serverBalance: result.data?.newBalance,
+          currentBalance: user?.balance
+        });
         
         setReels(finalReels);
         setWinLines(wins);
@@ -321,13 +333,13 @@ const SlotsGame: React.FC = () => {
         } else if (totalWinAmount > 0) {
           setShowWinAnimation(true);
           if (totalWinAmount >= betAmount * 50) {
-            setMessage(`🌟 MEGA WIN! 🌟 The cosmic forces bestow ${totalWinAmount} credits!`);
+            setMessage(`🌟 MEGA WIN! 🌟 The cosmic forces bestow $${totalWinAmount.toFixed(2)}!`);
             setMessageType("mega-win");
           } else if (totalWinAmount >= betAmount * 20) {
-            setMessage(`💫 BIG WIN! 💫 The spirits reward you with ${totalWinAmount} credits!`);
+            setMessage(`💫 BIG WIN! 💫 The spirits reward you with $${totalWinAmount.toFixed(2)}!`);
             setMessageType("big-win");
           } else {
-            setMessage(`🔮 Mystical victory! You've won ${totalWinAmount} credits! 🔮`);
+            setMessage(`🔮 Mystical victory! You've won $${totalWinAmount.toFixed(2)}! 🔮`);
             setMessageType("win");
           }
         } else {
@@ -335,9 +347,16 @@ const SlotsGame: React.FC = () => {
           setMessageType("lose");
         }
 
-        // Update balance and history
-        if (result.success && result.data) {
-          updateBalance(result.data.newBalance || user.balance);
+        // Update balance from server response
+        if (result.success && result.data && result.data.newBalance !== undefined) {
+          console.log('Updating balance from server:', result.data.newBalance);
+          updateBalance(result.data.newBalance);
+        } else if (!result.success) {
+          console.error('Bet placement failed:', result.message);
+          setMessage(`❌ Bet failed: ${result.message || 'Unknown error'}`);
+          setMessageType("error");
+        } else {
+          console.log('No server balance received, keeping current balance');
         }
 
         setGameHistory((prev: GameHistoryItem[]) => [{
@@ -395,7 +414,19 @@ const SlotsGame: React.FC = () => {
           </div>
           <div className="text-right text-white">
             <div className="text-sm opacity-75">Balance</div>
-            <div className="text-2xl font-bold text-green-400">${user?.balance?.toFixed(2) || '0.00'}</div>
+            <div className="flex items-center space-x-2">
+              <div className="text-2xl font-bold text-green-400">${user?.balance?.toFixed(2) || '0.00'}</div>
+              {isBalanceLoading && (
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-green-400 border-t-transparent"></div>
+              )}
+              <button
+                onClick={refreshBalance}
+                className="text-green-400 hover:text-green-300 transition-colors"
+                title="Refresh Balance"
+              >
+                🔄
+              </button>
+            </div>
           </div>
         </div>
       </div>

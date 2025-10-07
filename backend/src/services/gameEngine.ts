@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+const crypto = require('crypto');
 
 export interface GameResult {
   result: any;
@@ -36,37 +36,147 @@ export class ProvablyFairEngine {
     betAmount: number
   ): GameResult {
     const hash = this.generateHash(serverSeed, clientSeed, nonce);
-    const random1 = this.hashToFloat(hash.substring(0, 16));
-    const random2 = this.hashToFloat(hash.substring(16, 32));
-    const random3 = this.hashToFloat(hash.substring(32, 48));
+    
+    // Fortune Teller themed symbols with weighted selection
+    const symbols = ['🔮', '🪬', '🃏', '🧿', '🦉', '⭐', '🌙', '👑', '💎', '💰', '🌟', '🎭', '🎲', 'WILD'];
+    const weights = {
+      '🔮': 1,  // Epic - rarest
+      '🪬': 2,
+      '🃏': 2,
+      '🧿': 4,  // Rare
+      '🦉': 4,
+      '⭐': 5,
+      '🌙': 6,
+      '👑': 8,  // Common high
+      '💎': 10,
+      '💰': 12,
+      '🌟': 15, // Common
+      '🎭': 18,
+      '🎲': 20,
+      'WILD': 3 // Special
+    };
 
-    // Slot symbols: 0=Cherry, 1=Lemon, 2=Orange, 3=Plum, 4=Bell, 5=Bar, 6=Seven
-    const reel1 = Math.floor(random1 * 7);
-    const reel2 = Math.floor(random2 * 7);
-    const reel3 = Math.floor(random3 * 7);
+    // Create weighted symbol array
+    const weightedSymbols: string[] = [];
+    Object.entries(weights).forEach(([symbol, weight]) => {
+      for (let i = 0; i < weight; i++) {
+        weightedSymbols.push(symbol);
+      }
+    });
 
-    const result = [reel1, reel2, reel3];
-    let multiplier = 0;
-
-    // Win conditions
-    if (reel1 === reel2 && reel2 === reel3) {
-      // Three of a kind
-      const payouts = [5, 10, 15, 25, 50, 100, 777]; // Multipliers for each symbol
-      multiplier = payouts[reel1];
-    } else if (reel1 === reel2 || reel2 === reel3 || reel1 === reel3) {
-      // Two of a kind
-      multiplier = 2;
+    // Generate 5x3 grid using hash-based randomness
+    const reels: string[][] = [];
+    for (let col = 0; col < 5; col++) {
+      const reel: string[] = [];
+      for (let row = 0; row < 3; row++) {
+        const hashIndex = (col * 3 + row) * 8;
+        const random = this.hashToFloat(hash.substring(hashIndex % 56, (hashIndex + 8) % 64));
+        const symbolIndex = Math.floor(random * weightedSymbols.length);
+        reel.push(weightedSymbols[symbolIndex]);
+      }
+      reels.push(reel);
     }
 
-    const isWin = multiplier > 0;
-    const winAmount = isWin ? betAmount * multiplier : 0;
+    // Define 20 paylines (same as frontend)
+    const paylines = [
+      [[1,0],[1,1],[1,2],[1,3],[1,4]], // Middle row
+      [[0,0],[0,1],[0,2],[0,3],[0,4]], // Top row
+      [[2,0],[2,1],[2,2],[2,3],[2,4]], // Bottom row
+      [[0,0],[1,1],[2,2],[1,3],[0,4]], // V shape
+      [[2,0],[1,1],[0,2],[1,3],[2,4]], // ^ shape
+      [[0,0],[0,1],[1,2],[2,3],[2,4]], // Diagonal down
+      [[2,0],[2,1],[1,2],[0,3],[0,4]], // Diagonal up
+      [[1,0],[0,1],[0,2],[0,3],[1,4]], // Dip down
+      [[1,0],[2,1],[2,2],[2,3],[1,4]], // Dip up
+      [[0,0],[1,1],[0,2],[1,3],[0,4]], // Zigzag down
+      [[2,0],[1,1],[2,2],[1,3],[2,4]], // Zigzag up
+      [[1,0],[1,1],[0,2],[1,3],[1,4]], // Middle dip down
+      [[1,0],[1,1],[2,2],[1,3],[1,4]], // Middle dip up
+      [[0,0],[0,1],[0,2],[1,3],[2,4]], // L shape
+      [[2,0],[2,1],[2,2],[1,3],[0,4]], // L shape inverted
+      [[0,0],[1,1],[1,2],[1,3],[0,4]], // Arch
+      [[2,0],[1,1],[1,2],[1,3],[2,4]], // Arch inverted
+      [[1,0],[0,1],[1,2],[0,3],[1,4]], // W shape
+      [[1,0],[2,1],[1,2],[2,3],[1,4]], // W shape inverted
+      [[0,0],[2,1],[0,2],[2,3],[0,4]]  // Lightning
+    ];
+
+    // Symbol multipliers (same as frontend)
+    const getSymbolMultiplier = (symbol: string, count: number): number => {
+      const multipliers: { [key: string]: number[] } = {
+        '🔮': [0, 0, 50, 200, 1000], // Epic
+        '🪬': [0, 0, 25, 100, 500],
+        '🃏': [0, 0, 20, 80, 400],
+        '🧿': [0, 0, 15, 60, 300], // Rare
+        '🦉': [0, 0, 12, 50, 250],
+        '⭐': [0, 0, 10, 40, 200],
+        '🌙': [0, 0, 8, 35, 150],
+        '👑': [0, 0, 6, 25, 100], // Common high
+        '💎': [0, 0, 5, 20, 80],
+        '💰': [0, 0, 4, 15, 60],
+        '🌟': [0, 0, 3, 12, 50], // Common
+        '🎭': [0, 0, 2, 10, 40],
+        '🎲': [0, 0, 2, 8, 30]
+      };
+      return multipliers[symbol]?.[count] || 0;
+    };
+
+    // Calculate wins on all paylines
+    const wins: any[] = [];
+    let totalWinAmount = 0;
+
+    paylines.forEach((line, lineIndex) => {
+      const lineSymbols = line.map(([row, col]) => reels[col][row]);
+      const cleanSymbols = lineSymbols.map(symbol => symbol === 'WILD' ? 'WILD' : symbol);
+      
+      // Count consecutive matching symbols from left
+      let matchCount = 1;
+      let matchSymbol = cleanSymbols[0];
+      
+      for (let i = 1; i < cleanSymbols.length; i++) {
+        if (cleanSymbols[i] === matchSymbol || cleanSymbols[i] === 'WILD' || matchSymbol === 'WILD') {
+          if (matchSymbol === 'WILD' && cleanSymbols[i] !== 'WILD') {
+            matchSymbol = cleanSymbols[i];
+          }
+          matchCount++;
+        } else {
+          break;
+        }
+      }
+      
+      // Check if we have a winning combination (3+ symbols)
+      if (matchCount >= 3 && matchSymbol !== 'WILD') {
+        const baseMultiplier = getSymbolMultiplier(matchSymbol, matchCount);
+        const wildCount = lineSymbols.slice(0, matchCount).filter(s => s === 'WILD').length;
+        const finalMultiplier = baseMultiplier * Math.pow(2, wildCount); // Wild doubles the win
+        const winAmount = betAmount * finalMultiplier;
+        
+        wins.push({
+          line: lineIndex,
+          symbols: lineSymbols.slice(0, matchCount),
+          positions: line.slice(0, matchCount),
+          multiplier: finalMultiplier,
+          winAmount
+        });
+        
+        totalWinAmount += winAmount;
+      }
+    });
+
+    const isWin = totalWinAmount > 0;
+    const overallMultiplier = isWin ? totalWinAmount / betAmount : 0;
 
     return {
-      result,
+      result: {
+        reels,
+        wins,
+        totalWins: wins.length,
+        symbols // Include symbol reference
+      },
       hash,
       isWin,
-      multiplier,
-      winAmount
+      multiplier: overallMultiplier,
+      winAmount: totalWinAmount
     };
   }
 

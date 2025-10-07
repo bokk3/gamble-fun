@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const Navbar: React.FC = () => {
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isBalanceLoading } = useAuth();
 
   return (
     <nav className="bg-casino-primary border-b border-casino-accent/30">
@@ -16,9 +16,14 @@ const Navbar: React.FC = () => {
           <div className="flex items-center space-x-4">
             {isAuthenticated ? (
               <>
-                <span className="text-casino-gold">
-                  💰 ${user?.balance?.toFixed(2) || '0.00'}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-casino-gold">
+                    💰 ${user?.balance?.toFixed(2) || '0.00'}
+                  </span>
+                  {isBalanceLoading && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-casino-gold border-t-transparent"></div>
+                  )}
+                </div>
                 <span className="text-gray-300">
                   Welcome, {user?.username}!
                 </span>
