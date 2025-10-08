@@ -195,10 +195,20 @@ const RouletteGame: React.FC = () => {
     // Play roulette wheel spinning sound
     audioService.playRouletteWheel();
 
-    // Animate wheel and ball
-    const spinDuration = 4000;
-    const finalWheelRotation = wheelRotation + 1440 + Math.random() * 720; // 4-6 full rotations
-    const finalBallRotation = ballRotation - (2160 + Math.random() * 1080); // Opposite direction
+    // Enhanced spinning animation with multiple phases
+    const spinDuration = 5000; // Longer spin for more excitement
+    
+    // Calculate dramatic spins - wheel and ball go in opposite directions
+    const wheelSpins = 8 + Math.random() * 4; // 8-12 full rotations
+    const ballSpins = 12 + Math.random() * 6; // 12-18 full rotations in opposite direction
+    
+    const finalWheelRotation = wheelRotation + (wheelSpins * 360);
+    const finalBallRotation = ballRotation - (ballSpins * 360); // Opposite direction
+
+    // Animate with CSS transition
+    if (wheelRef.current) {
+      wheelRef.current.style.transition = `transform ${spinDuration}ms cubic-bezier(0.17, 0.67, 0.12, 0.99)`;
+    }
 
     setWheelRotation(finalWheelRotation);
     setBallRotation(finalBallRotation);
@@ -335,12 +345,21 @@ const RouletteGame: React.FC = () => {
                 onClick={spin}
                 disabled={isSpinning || bets.length === 0}
                 className={`px-8 py-4 rounded-xl font-bold text-xl transition-all duration-300 shadow-lg ${
-                  isSpinning || bets.length === 0
+                  isSpinning 
+                    ? 'bg-gradient-to-br from-orange-500 to-red-500 text-white cursor-not-allowed animate-pulse shadow-orange-500/50'
+                    : bets.length === 0
                     ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-br from-red-500 to-yellow-500 hover:from-red-600 hover:to-yellow-600 text-black hover:shadow-xl transform hover:scale-105 animate-pulse'
+                    : 'bg-gradient-to-br from-red-500 to-yellow-500 hover:from-red-600 hover:to-yellow-600 text-black hover:shadow-xl transform hover:scale-105 shadow-red-500/30'
                 }`}
               >
-                {isSpinning ? '🎲 SPINNING...' : '🎲 SPIN WHEEL'}
+                {isSpinning ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    <span>🎲 SPINNING...</span>
+                  </div>
+                ) : (
+                  '🎲 SPIN WHEEL'
+                )}
               </button>
               
               {/* Level Badge */}
@@ -446,15 +465,27 @@ const RouletteGame: React.FC = () => {
             <div className="flex justify-center items-center mb-6">
               <div className="relative">
                 {/* Wheel Container */}
-                <div className="relative w-80 h-80 mx-auto">
+                <div className={`relative w-80 h-80 mx-auto ${isSpinning ? 'animate-pulse' : ''}`}>
                   {/* Outer Ring */}
-                  <div className="absolute inset-0 rounded-full border-8 border-yellow-500 bg-gradient-to-br from-yellow-600 to-yellow-800"></div>
+                  <div className={`absolute inset-0 rounded-full border-8 bg-gradient-to-br from-yellow-600 to-yellow-800 ${
+                    isSpinning ? 'border-yellow-300 shadow-2xl shadow-yellow-500/50' : 'border-yellow-500'
+                  }`}></div>
+                  
+                  {/* Spinning glow effect */}
+                  {isSpinning && (
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-yellow-400/20 to-transparent animate-spin"></div>
+                  )}
                   
                   {/* Wheel */}
                   <div 
                     ref={wheelRef}
-                    className="absolute inset-4 rounded-full border-4 border-yellow-400 overflow-hidden transition-transform duration-4000 ease-out"
-                    style={{ transform: `rotate(${wheelRotation}deg)` }}
+                    className={`absolute inset-4 rounded-full border-4 border-yellow-400 overflow-hidden ${
+                      isSpinning ? 'shadow-2xl shadow-yellow-500/50' : 'shadow-xl'
+                    }`}
+                    style={{ 
+                      transform: `rotate(${wheelRotation}deg)`,
+                      transition: isSpinning ? '' : 'transform 0.3s ease-out'
+                    }}
                   >
                     {/* Number Segments */}
                     {wheelNumbers.map((number, index) => {
@@ -481,12 +512,20 @@ const RouletteGame: React.FC = () => {
                     })}
                   </div>
 
-                  {/* Ball */}
+                  {/* Ball Track */}
                   <div 
-                    className="absolute inset-8 rounded-full border-2 border-white transition-transform duration-4000 ease-out"
-                    style={{ transform: `rotate(${ballRotation}deg)` }}
+                    className={`absolute inset-8 rounded-full border-2 border-white ${
+                      isSpinning ? 'shadow-lg shadow-white/30' : ''
+                    }`}
+                    style={{ 
+                      transform: `rotate(${ballRotation}deg)`,
+                      transition: isSpinning ? '' : 'transform 0.3s ease-out'
+                    }}
                   >
-                    <div className="absolute top-0 left-1/2 w-4 h-4 bg-white rounded-full shadow-lg transform -translate-x-1/2 -translate-y-2"></div>
+                    {/* Ball */}
+                    <div className={`absolute top-0 left-1/2 w-4 h-4 rounded-full shadow-lg transform -translate-x-1/2 -translate-y-2 ${
+                      isSpinning ? 'bg-yellow-300 animate-pulse shadow-yellow-300/50' : 'bg-white'
+                    }`}></div>
                   </div>
 
                   {/* Center Hub */}

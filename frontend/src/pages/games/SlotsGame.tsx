@@ -691,9 +691,9 @@ const SlotsGame: React.FC = () => {
               
               {/* Enhanced 5x3 Slot Machine */}
               <div className="bg-gradient-to-b from-black via-purple-900 to-black rounded-2xl p-8 border-4 border-purple-600 shadow-inner">
-                <div className="grid grid-cols-5 gap-4">
+                <div className="grid grid-cols-5 gap-4 justify-items-center max-w-fit mx-auto">
                   {reels.map((reel, colIndex) => (
-                    <div key={colIndex} className="flex flex-col space-y-2">
+                    <div key={colIndex} className="flex flex-col gap-4">
                       {reel.map((symbol, rowIndex) => {
                         const isWinningSymbol = winLines.some(win => 
                           win.positions.some(([row, col]) => row === rowIndex && col === colIndex)
@@ -703,10 +703,10 @@ const SlotsGame: React.FC = () => {
                           <div
                             key={`${colIndex}-${rowIndex}`}
                             className={`
-                              w-28 h-28 bg-gradient-to-b from-white via-purple-50 to-purple-100 
-                              rounded-2xl flex items-center justify-center text-6xl border-4 
+                              w-24 h-24 bg-gradient-to-b from-white via-purple-50 to-purple-100 
+                              rounded-xl border-4 shadow-xl transform transition-all duration-500
+                              flex items-center justify-center
                               ${isWinningSymbol ? 'border-yellow-400 animate-pulse shadow-yellow-400' : 'border-purple-300'} 
-                              shadow-xl transform transition-all duration-500
                               ${isSpinning ? 'animate-bounce scale-110' : 'hover:scale-105'}
                               ${isWinningSymbol && showWinAnimation ? 'animate-ping' : ''}
                               ${symbol === symbols.wild ? 'bg-gradient-to-b from-yellow-200 to-yellow-400' : ''}
@@ -720,12 +720,15 @@ const SlotsGame: React.FC = () => {
                               filter: isWinningSymbol ? 'brightness(1.3) saturate(1.5)' : 'none'
                             }}
                           >
-                            <span className={`
-                              ${symbol === symbols.wild ? 'animate-spin text-yellow-800' : ''}
-                              ${symbol === symbols.scatter ? 'animate-bounce text-pink-800' : ''}
-                              ${symbol === symbols.bonus ? 'animate-pulse text-green-800' : ''}
-                              ${isWinningSymbol ? 'animate-bounce' : ''}
-                            `}>
+                            <span 
+                              className={`
+                                text-5xl leading-none select-none
+                                ${symbol === symbols.wild ? 'animate-spin text-yellow-800' : ''}
+                                ${symbol === symbols.scatter ? 'animate-bounce text-pink-800' : ''}
+                                ${symbol === symbols.bonus ? 'animate-pulse text-green-800' : ''}
+                                ${isWinningSymbol ? 'animate-bounce' : ''}
+                              `}
+                            >
                               {symbol}
                             </span>
                           </div>

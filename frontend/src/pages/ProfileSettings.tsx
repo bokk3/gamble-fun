@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { bonusService, BonusStats } from '../services/bonusService';
 import BonusDisplay from '../components/BonusDisplay';
+import BuyCreditsModal from '../components/BuyCreditsModal';
 
 interface UserProfileData {
   id: number;
@@ -41,6 +42,8 @@ const ProfileSettings: React.FC = () => {
     newPassword: '',
     confirmPassword: ''
   });
+  const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
+  const [creditPurchaseHistory, setCreditPurchaseHistory] = useState([]);
 
   useEffect(() => {
     loadProfileData();
@@ -50,17 +53,70 @@ const ProfileSettings: React.FC = () => {
     try {
       setLoading(true);
       
-      // Load user profile (mock for now)
+      // Load user profile from backend
       if (user) {
-        setProfileData({
-          id: user.id || 0,
-          username: user.username || '',
-          email: user.email || '',
-          balance: user.balance || 0,
-          totalWon: 0, // These would come from backend
-          totalLost: 0,
-          createdAt: new Date().toISOString()
-        });
+        try {
+          const token = localStorage.getItem('casino_token');
+          console.log('Using token for profile API:', token ? 'Token exists' : 'No token found');
+          
+          const response = await fetch('/api/user/profile', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log('Profile API response:', result); // Debug log
+            if (result.success && result.data) {
+              setProfileData({
+                id: result.data.id || user.id || 0,
+                username: result.data.username || user.username || '',
+                email: result.data.email || user.email || '',
+                balance: result.data.balance || user.balance || 0,
+                totalWon: result.data.totalWon || 0,
+                totalLost: result.data.totalLost || 0,
+                createdAt: result.data.createdAt || new Date().toISOString()
+              });
+            } else {
+              console.warn('Profile API returned no data:', result);
+              // Fallback to user context data
+              setProfileData({
+                id: user.id || 0,
+                username: user.username || '',
+                email: user.email || '',
+                balance: user.balance || 0,
+                totalWon: 0,
+                totalLost: 0,
+                createdAt: new Date().toISOString()
+              });
+            }
+          } else {
+            console.error('Profile API failed:', response.status, response.statusText);
+            // Fallback to user context data
+            setProfileData({
+              id: user.id || 0,
+              username: user.username || '',
+              email: user.email || '',
+              balance: user.balance || 0,
+              totalWon: 0,
+              totalLost: 0,
+              createdAt: new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+          // Fallback to user context data
+          setProfileData({
+            id: user.id || 0,
+            username: user.username || '',
+            email: user.email || '',
+            balance: user.balance || 0,
+            totalWon: 0,
+            totalLost: 0,
+            createdAt: new Date().toISOString()
+          });
+        }
       }
 
       // Load bonus stats
@@ -74,10 +130,32 @@ const ProfileSettings: React.FC = () => {
       if (savedPrefs) {
         setPreferences(JSON.parse(savedPrefs));
       }
+
+      // Load credit purchase history
+      await loadCreditHistory();
     } catch (error) {
       console.error('Error loading profile data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCreditHistory = async () => {
+    try {
+      const response = await fetch('/api/credits/history', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setCreditPurchaseHistory(result.data || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading credit history:', error);
     }
   };
 
@@ -109,6 +187,12 @@ const ProfileSettings: React.FC = () => {
       console.error('Error changing password:', error);
       alert('Failed to change password');
     }
+  };
+
+  const handleCreditPurchaseSuccess = async (creditsAdded: number) => {
+    // Refresh balance and history
+    await loadProfileData();
+    await loadCreditHistory();
   };
 
   const formatDate = (dateString: string) => {
@@ -162,6 +246,7 @@ const ProfileSettings: React.FC = () => {
                 {[
                   { id: 'overview', label: 'Overview', icon: '👤' },
                   { id: 'bonus', label: 'Bonus Stats', icon: '🎁' },
+                  { id: 'credits', label: 'Buy Credits', icon: '💰' },
                   { id: 'settings', label: 'Settings', icon: '⚙️' },
                   { id: 'security', label: 'Security', icon: '🔒' },
                   { id: 'history', label: 'History', icon: '📊' }
@@ -269,47 +354,80 @@ const ProfileSettings: React.FC = () => {
                   <h2 className="text-2xl font-bold text-white mb-6">Bonus Statistics</h2>
                   
                   {bonusStats ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
-                        <div className="text-3xl font-bold text-casino-gold mb-2">
-                          {bonusStats.bonusTokens.toFixed(0)}
+                    <div>
+                      {/* EXP Stats Section */}
+                      <div className="bg-gradient-to-r from-purple-800/50 to-blue-800/50 rounded-xl p-6 mb-8 border-2 border-purple-500">
+                        <h3 className="text-xl font-bold text-white mb-4 text-center">🌟 Experience & Level Stats 🌟</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="bg-casino-primary border border-purple-400/50 rounded-lg p-6 text-center">
+                            <div className="text-4xl font-bold text-purple-400 mb-2">
+                              {bonusStats.accountLevel}
+                            </div>
+                            <div className="text-gray-300 font-medium">Account Level</div>
+                            <div className="text-xs text-purple-300 mt-1">Cross-Game Progress</div>
+                          </div>
+                          
+                          <div className="bg-casino-primary border border-blue-400/50 rounded-lg p-6 text-center">
+                            <div className="text-4xl font-bold text-blue-400 mb-2">
+                              {bonusStats.totalXp.toLocaleString()}
+                            </div>
+                            <div className="text-gray-300 font-medium">Total EXP</div>
+                            <div className="text-xs text-blue-300 mt-1">Lifetime Experience</div>
+                          </div>
+                          
+                          <div className="bg-casino-primary border border-green-400/50 rounded-lg p-6 text-center">
+                            <div className="text-4xl font-bold text-green-400 mb-2">
+                              {bonusStats.globalMultiplier.toFixed(2)}x
+                            </div>
+                            <div className="text-gray-300 font-medium">Global Multiplier</div>
+                            <div className="text-xs text-green-300 mt-1">Level Bonus</div>
+                          </div>
                         </div>
-                        <div className="text-gray-400">Bonus Tokens</div>
                       </div>
-                      
-                      <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
-                        <div className="text-3xl font-bold text-casino-green mb-2">
-                          {bonusStats.totalBonusEarned.toFixed(0)}
+
+                      {/* Regular Bonus Stats */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
+                          <div className="text-3xl font-bold text-casino-gold mb-2">
+                            {bonusStats.bonusTokens.toFixed(0)}
+                          </div>
+                          <div className="text-gray-400">Bonus Tokens</div>
                         </div>
-                        <div className="text-gray-400">Total Earned</div>
-                      </div>
-                      
-                      <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
-                        <div className="text-3xl font-bold text-casino-accent mb-2">
-                          {bonusStats.currentWinStreak}
+                        
+                        <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
+                          <div className="text-3xl font-bold text-casino-green mb-2">
+                            {bonusStats.totalBonusEarned.toFixed(0)}
+                          </div>
+                          <div className="text-gray-400">Total Earned</div>
                         </div>
-                        <div className="text-gray-400">Win Streak</div>
-                      </div>
-                      
-                      <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
-                        <div className="text-3xl font-bold text-purple-400 mb-2">
-                          {bonusStats.totalGamesPlayed}
+                        
+                        <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
+                          <div className="text-3xl font-bold text-casino-accent mb-2">
+                            {bonusStats.currentWinStreak}
+                          </div>
+                          <div className="text-gray-400">Win Streak</div>
                         </div>
-                        <div className="text-gray-400">Games Played</div>
-                      </div>
-                      
-                      <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
-                        <div className="text-3xl font-bold text-yellow-400 mb-2">
-                          {bonusStats.megaWinCount}
+                        
+                        <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
+                          <div className="text-3xl font-bold text-purple-400 mb-2">
+                            {bonusStats.totalGamesPlayed}
+                          </div>
+                          <div className="text-gray-400">Games Played</div>
                         </div>
-                        <div className="text-gray-400">Mega Wins</div>
-                      </div>
-                      
-                      <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
-                        <div className="text-3xl font-bold text-pink-400 mb-2">
-                          {bonusStats.epicWinCount}
+                        
+                        <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
+                          <div className="text-3xl font-bold text-yellow-400 mb-2">
+                            {bonusStats.megaWinCount}
+                          </div>
+                          <div className="text-gray-400">Mega Wins</div>
                         </div>
-                        <div className="text-gray-400">Epic Wins</div>
+                        
+                        <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6 text-center">
+                          <div className="text-3xl font-bold text-pink-400 mb-2">
+                            {bonusStats.epicWinCount}
+                          </div>
+                          <div className="text-gray-400">Epic Wins</div>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -444,6 +562,76 @@ const ProfileSettings: React.FC = () => {
                 </div>
               )}
 
+              {/* Credits Tab */}
+              {activeTab === 'credits' && (
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-6">Buy Credits</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    {/* Current Balance Card */}
+                    <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6">
+                      <h3 className="text-xl font-bold text-white mb-4">Current Balance</h3>
+                      <div className="text-center">
+                        <div className="text-4xl font-bold text-casino-gold mb-2">
+                          ${profileData?.balance.toFixed(2) || '0.00'}
+                        </div>
+                        <div className="text-gray-400">Available Credits</div>
+                      </div>
+                    </div>
+
+                    {/* Quick Purchase */}
+                    <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6">
+                      <h3 className="text-xl font-bold text-white mb-4">Quick Purchase</h3>
+                      <button
+                        onClick={() => setShowBuyCreditsModal(true)}
+                        className="w-full casino-button-primary py-4 text-lg font-bold"
+                      >
+                        💰 Buy More Credits
+                      </button>
+                      <div className="text-xs text-gray-400 mt-2 text-center">
+                        Secure payment • Instant delivery
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Purchase History */}
+                  <div className="bg-casino-primary border border-casino-accent/20 rounded-lg p-6">
+                    <h3 className="text-xl font-bold text-white mb-4">Recent Purchases</h3>
+                    
+                    {creditPurchaseHistory.length > 0 ? (
+                      <div className="space-y-3">
+                        {creditPurchaseHistory.slice(0, 5).map((purchase: any, index) => (
+                          <div key={purchase.id || index} className="flex items-center justify-between p-4 bg-casino-secondary rounded-lg">
+                            <div>
+                              <div className="text-white font-medium">{purchase.packageName}</div>
+                              <div className="text-gray-400 text-sm">
+                                {new Date(purchase.createdAt).toLocaleDateString()} • {purchase.paymentMethod}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-casino-green font-bold">+{purchase.creditsPurchased} credits</div>
+                              <div className="text-gray-400 text-sm">${purchase.amountPaid}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-center py-8">
+                        <div className="text-4xl mb-4">💳</div>
+                        <div className="text-lg mb-2">No purchases yet</div>
+                        <div className="text-sm">Buy your first credit package to get started!</div>
+                        <button
+                          onClick={() => setShowBuyCreditsModal(true)}
+                          className="casino-button-primary px-6 py-3 mt-4"
+                        >
+                          Buy Credits Now
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* History Tab */}
               {activeTab === 'history' && (
                 <div>
@@ -460,6 +648,13 @@ const ProfileSettings: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Buy Credits Modal */}
+      <BuyCreditsModal
+        isOpen={showBuyCreditsModal}
+        onClose={() => setShowBuyCreditsModal(false)}
+        onSuccess={handleCreditPurchaseSuccess}
+      />
     </div>
   );
 };

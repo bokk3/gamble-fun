@@ -110,12 +110,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [isAuthenticated]);
 
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
+    console.log('🔐 Login attempt started:', { username: credentials.username, apiUrl: API_BASE_URL });
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/login`, credentials);
+      console.log('✅ Login API response:', response.data);
       
       if (response.data.success) {
         const { token: newToken, user: userData } = response.data.data;
         
+        console.log('👤 Setting user data:', userData);
         setToken(newToken);
         setUser(userData);
         setIsAuthenticated(true);
@@ -129,6 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return true;
       }
     } catch (error: any) {
+      console.error('❌ Login error:', error);
       const message = error.response?.data?.message || 'Login failed';
       toast.error(message);
     }
