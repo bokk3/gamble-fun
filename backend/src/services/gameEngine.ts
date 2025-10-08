@@ -64,16 +64,29 @@ export class ProvablyFairEngine {
         weightedSymbols.push(symbol);
       }
     });
+    
+    // Debug: ensure we have symbols
+    if (weightedSymbols.length === 0) {
+      console.error('No weighted symbols generated!');
+      // Fallback to basic symbols
+      weightedSymbols.push(...symbols.slice(0, -1)); // All except WILD
+    }
 
     // Generate 5x3 grid using hash-based randomness
     const reels: string[][] = [];
     for (let col = 0; col < 5; col++) {
       const reel: string[] = [];
       for (let row = 0; row < 3; row++) {
-        const hashIndex = (col * 3 + row) * 8;
-        const random = this.hashToFloat(hash.substring(hashIndex % 56, (hashIndex + 8) % 64));
+        // Use a simpler, more reliable hash indexing approach
+        const position = col * 3 + row;
+        const hashStart = (position * 4) % (hash.length - 8); // Ensure we stay within bounds
+        const hashSlice = hash.substring(hashStart, hashStart + 8);
+        const random = this.hashToFloat(hashSlice);
         const symbolIndex = Math.floor(random * weightedSymbols.length);
-        reel.push(weightedSymbols[symbolIndex]);
+        
+        // Ensure we always get a valid symbol
+        const selectedSymbol = weightedSymbols[symbolIndex] || weightedSymbols[0];
+        reel.push(selectedSymbol);
       }
       reels.push(reel);
     }

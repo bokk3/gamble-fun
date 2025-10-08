@@ -57,7 +57,7 @@ const SlotsGame: React.FC = () => {
     });
   }, [isAuthenticated, user, navigate]);
   
-  const [betAmount, setBetAmount] = useState(25);
+  const [betAmount, setBetAmount] = useState(1);
   const [isSpinning, setIsSpinning] = useState(false);
   const [reels, setReels] = useState<string[][]>([
     ['🔮', '🃏', '⭐'],
@@ -98,7 +98,7 @@ const SlotsGame: React.FC = () => {
     '🎰': 1  // Bonus
   };
 
-  const minBet = 5;
+  const minBet = 1;
   const maxBet = 500;
   const ROWS = 3;
   const COLS = 5;
@@ -304,32 +304,31 @@ const SlotsGame: React.FC = () => {
       setTimeout(() => {
         clearInterval(spinInterval);
         
-        // Generate visual result (for display only)
-        const finalReels = generateRandomReels();
-        const wins = checkWins(finalReels);
+        // Use server's authoritative reels (not client-generated)
+        const serverReels = result.success && result.data?.result?.reels 
+          ? result.data.result.reels 
+          : generateRandomReels(); // Fallback only if server data missing
+        
+        const serverWins = result.success && result.data?.result?.wins 
+          ? result.data.result.wins 
+          : [];
+        
+        const finalReels = serverReels;
+        const wins = serverWins; // Use server wins, not client calculation
         const bonusFeatures = checkBonusFeatures(finalReels);
         
-        // ALWAYS use server's win amount for accurate balance - never trust client calculation
+        // ALWAYS use server's win amount for accurate balance
         const serverWinAmount = result.success && result.data ? result.data.winAmount : 0;
-        const clientWinAmount = wins.reduce((sum, win) => sum + win.winAmount, 0);
-        const totalWinAmount = serverWinAmount; // Use server amount only for display and balance
+        const totalWinAmount = serverWinAmount;
         
-        console.log('Win amounts:', {
+        console.log('Server spin result:', {
           serverWinAmount,
-          clientWinAmount, 
           totalWinAmount,
+          serverReels: result.data?.result?.reels,
+          serverWins: result.data?.result?.wins,
           serverBalance: result.data?.newBalance,
           currentBalance: user?.balance
         });
-
-        // Warn about calculation mismatches (for debugging)
-        if (Math.abs(serverWinAmount - clientWinAmount) > 0.01 && clientWinAmount > 0) {
-          console.warn('⚠️ PAYOUT MISMATCH!', {
-            server: serverWinAmount,
-            client: clientWinAmount,
-            difference: Math.abs(serverWinAmount - clientWinAmount)
-          });
-        }
         
         setReels(finalReels);
         setWinLines(wins);
@@ -365,23 +364,32 @@ const SlotsGame: React.FC = () => {
           setMessageType("lose");
         }
 
-        // Update balance from server response
+        // Update balance from server response  
+        console.log('Full server response:', result);
+        console.log('Server data:', result.data);
+        
         if (result.success && result.data && result.data.newBalance !== undefined) {
-          console.log('Updating balance from server:', result.data.newBalance);
+          console.log('✅ Updating balance from server:', result.data.newBalance, 'Current balance:', user?.balance);
           updateBalance(result.data.newBalance);
+          
+          // Force a balance refresh after a short delay to ensure sync
+          setTimeout(() => {
+            console.log('🔄 Force refreshing balance...');
+            refreshBalance();
+          }, 1000);
         } else if (!result.success) {
-          console.error('Bet placement failed:', result.message);
+          console.error('❌ Bet placement failed:', result.message);
           setMessage(`❌ Bet failed: ${result.message || 'Unknown error'}`);
           setMessageType("error");
         } else {
-          console.log('No server balance received, keeping current balance');
+          console.warn('⚠️ No server balance received, response:', result);
         }
 
         setGameHistory((prev: GameHistoryItem[]) => [{
           reels: finalReels,
           betAmount,
           winAmount: totalWinAmount,
-          multiplier: wins.length > 0 ? Math.max(...wins.map(w => w.multiplier)) : 0,
+          multiplier: wins.length > 0 ? Math.max(...wins.map((w: any) => w.multiplier)) : 0,
           winLines: wins,
           bonusTriggered: bonusFeatures.bonus || bonusFeatures.freeSpins > 0,
           timestamp: new Date()

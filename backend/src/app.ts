@@ -32,10 +32,10 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 5000;
 
-// Rate limiting
+// Rate limiting - Increased for debugging
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 1000 // limit each IP to 1000 requests per windowMs (increased for debugging)
 });
 
 // Middleware
