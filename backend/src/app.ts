@@ -17,6 +17,7 @@ import { leaderboardRoutes } from './routes/leaderboard';
 import { adminRoutes } from './routes/admin';
 import bonusRoutes from './routes/bonus';
 import creditsRoutes from './routes/credits';
+import pokerRoutes from './routes/poker';
 import { initializeSocket } from './socket/socketHandler';
 import { connectDatabase } from './config/database';
 import { connectRedis } from './config/redis';
@@ -62,6 +63,7 @@ app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bonus', bonusRoutes);
 app.use('/api/credits', creditsRoutes);
+app.use('/api/poker', pokerRoutes);
 
 // Error handling
 app.use(errorHandler);
