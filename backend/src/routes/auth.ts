@@ -49,10 +49,17 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with welcome bonus
+    const welcomeBonus = 500.00; // $500 welcome bonus
     const result = await executeQuery(
       'INSERT INTO users (username, email, password_hash, balance) VALUES (?, ?, ?, ?)',
-      [username, email, passwordHash, 100.00]
+      [username, email, passwordHash, welcomeBonus]
+    );
+
+    // Record the welcome bonus transaction
+    await executeQuery(
+      'INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [result.insertId, 'bonus', welcomeBonus, 0, welcomeBonus, 'Welcome bonus for new account']
     );
 
     // Generate JWT token
@@ -68,14 +75,19 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: `🎉 Welcome to Gamble Fun Casino! You've received a $${welcomeBonus.toFixed(2)} welcome bonus!`,
       data: {
         token,
         user: {
           id: result.insertId,
           username,
           email,
-          balance: 100.00
+          balance: welcomeBonus
+        },
+        bonus: {
+          type: 'welcome',
+          amount: welcomeBonus,
+          message: `Welcome bonus of $${welcomeBonus.toFixed(2)} added to your account!`
         }
       }
     });
@@ -104,7 +116,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
     // Find user
     const users = await executeQuery(
-      'SELECT id, username, email, password_hash, balance FROM users WHERE username = ? AND is_active = TRUE',
+      'SELECT id, username, email, password_hash, balance, last_login, created_at FROM users WHERE username = ? AND is_active = TRUE',
       [username]
     );
 
@@ -128,6 +140,46 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Check for daily login bonus
+    let loginBonus = null;
+    const now = new Date();
+    const lastLogin = user.last_login ? new Date(user.last_login) : null;
+    const today = now.toDateString();
+    const lastLoginDay = lastLogin ? lastLogin.toDateString() : null;
+
+    // Award daily login bonus if it's a new day
+    if (!lastLogin || lastLoginDay !== today) {
+      const dailyBonusAmount = 50.00; // $50 daily login bonus
+      const currentBalance = parseFloat(user.balance);
+      const newBalance = currentBalance + dailyBonusAmount;
+
+      // Update balance and last login
+      await executeQuery(
+        'UPDATE users SET balance = ?, last_login = ? WHERE id = ?',
+        [newBalance, now, user.id]
+      );
+
+      // Record the daily bonus transaction
+      await executeQuery(
+        'INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, description) VALUES (?, ?, ?, ?, ?, ?)',
+        [user.id, 'bonus', dailyBonusAmount, currentBalance, newBalance, 'Daily login bonus']
+      );
+
+      loginBonus = {
+        type: 'daily',
+        amount: dailyBonusAmount,
+        message: `Daily login bonus of $${dailyBonusAmount.toFixed(2)} added to your account!`
+      };
+
+      user.balance = newBalance; // Update for response
+    } else {
+      // Just update last login time
+      await executeQuery(
+        'UPDATE users SET last_login = ? WHERE id = ?',
+        [now, user.id]
+      );
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { 
@@ -139,9 +191,13 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       { expiresIn: '24h' }
     );
 
+    const responseMessage = loginBonus 
+      ? `🎉 Welcome back! ${loginBonus.message}` 
+      : 'Welcome back to Gamble Fun Casino!';
+
     res.json({
       success: true,
-      message: 'Login successful',
+      message: responseMessage,
       data: {
         token,
         user: {
@@ -149,7 +205,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
           username: user.username,
           email: user.email,
           balance: parseFloat(user.balance)
-        }
+        },
+        bonus: loginBonus
       }
     });
   } catch (error) {

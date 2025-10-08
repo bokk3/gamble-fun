@@ -76,6 +76,9 @@ const SlotsGame: React.FC = () => {
   const [freeSpinsRemaining, setFreeSpinsRemaining] = useState(0);
   const [wildMultiplier, setWildMultiplier] = useState(1);
   const [showWinAnimation, setShowWinAnimation] = useState(false);
+  const [isAutoSpinning, setIsAutoSpinning] = useState(false);
+  const [autoSpinsRemaining, setAutoSpinsRemaining] = useState(0);
+  const [handlePulled, setHandlePulled] = useState(false);
 
   // Enhanced symbol set with special symbols
   const symbols = {
@@ -406,6 +409,52 @@ const SlotsGame: React.FC = () => {
     }
   };
 
+  // Auto-spin effect
+  useEffect(() => {
+    if (isAutoSpinning && autoSpinsRemaining > 0 && !isSpinning) {
+      const timer = setTimeout(() => {
+        spin();
+        setAutoSpinsRemaining(prev => prev - 1);
+      }, 1500); // Wait 1.5s between auto spins
+
+      return () => clearTimeout(timer);
+    } else if (autoSpinsRemaining === 0 && isAutoSpinning) {
+      setIsAutoSpinning(false);
+      setMessage("Auto-spin complete! The spirits rest...");
+      setMessageType("");
+    }
+  }, [isAutoSpinning, autoSpinsRemaining, isSpinning]);
+
+  // Handle pull animation
+  const pullHandle = () => {
+    if (isSpinning || !user || user.balance < betAmount) return;
+    
+    setHandlePulled(true);
+    audioService.playButtonClick();
+    
+    setTimeout(() => {
+      setHandlePulled(false);
+      spin();
+    }, 300);
+  };
+
+  // Auto-spin controls
+  const startAutoSpin = (spins: number) => {
+    if (isSpinning || !user || user.balance < betAmount) return;
+    
+    setAutoSpinsRemaining(spins);
+    setIsAutoSpinning(true);
+    setMessage(`🔄 Auto-spinning ${spins} times! The spirits work tirelessly...`);
+    setMessageType("auto");
+  };
+
+  const stopAutoSpin = () => {
+    setIsAutoSpinning(false);
+    setAutoSpinsRemaining(0);
+    setMessage("Auto-spin stopped. The spirits await your command...");
+    setMessageType("");
+  };
+
   const getWinType = (reels: string[][]) => {
     const allSymbols = reels.flat();
     const counts: { [key: string]: number } = {};
@@ -467,6 +516,7 @@ const SlotsGame: React.FC = () => {
           messageType === 'big-win' ? 'bg-gradient-to-r from-purple-600 to-pink-600 border-purple-400 text-white' :
           messageType === 'win' ? 'bg-gradient-to-r from-green-600 to-teal-600 border-green-400 text-white' :
           messageType === 'lose' ? 'bg-gradient-to-r from-red-600 to-pink-600 border-red-400 text-white' :
+          messageType === 'auto' ? 'bg-gradient-to-r from-blue-600 to-cyan-600 border-blue-400 text-white animate-pulse' :
           'bg-gradient-to-r from-purple-800 to-indigo-800 border-purple-500 text-purple-200'
         }`}>
           <p className="text-lg font-medium">{message}</p>
@@ -478,8 +528,36 @@ const SlotsGame: React.FC = () => {
         <div className="bg-gradient-to-b from-purple-900 to-indigo-900 rounded-2xl border-2 border-purple-500 p-8 shadow-2xl">
           
           {/* Slot Machine */}
-          <div className="text-center mb-8">
-            <div className="bg-gradient-to-b from-yellow-600 via-purple-700 to-black rounded-3xl p-10 mb-8 mx-auto max-w-6xl border-4 border-gold shadow-2xl">
+          <div className="text-center mb-8 relative">
+            {/* Slot Machine Handle */}
+            <div className="absolute -right-4 top-1/2 transform -translate-y-1/2 z-10">
+              <div className="relative">
+                {/* Handle Base */}
+                <div className="w-8 h-32 bg-gradient-to-b from-yellow-600 to-yellow-800 rounded-full border-4 border-yellow-400 shadow-xl"></div>
+                
+                {/* Handle Lever */}
+                <button
+                  onClick={pullHandle}
+                  disabled={isSpinning || !user || user.balance < betAmount}
+                  className={`absolute -top-6 -left-4 w-16 h-20 transition-all duration-300 ${
+                    handlePulled ? 'translate-y-8' : ''
+                  } ${
+                    isSpinning || !user || user.balance < betAmount
+                      ? 'cursor-not-allowed opacity-50'
+                      : 'cursor-pointer hover:scale-110 active:scale-95'
+                  }`}
+                >
+                  <div className="w-full h-full bg-gradient-to-r from-red-600 to-red-800 rounded-full border-4 border-red-400 shadow-2xl flex items-center justify-center">
+                    <div className="w-8 h-8 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full border-2 border-yellow-300"></div>
+                  </div>
+                </button>
+                
+                {/* Handle Shadow */}
+                <div className="absolute top-0 left-2 w-4 h-40 bg-black opacity-20 rounded-full -z-10"></div>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-b from-yellow-600 via-purple-700 to-black rounded-3xl p-10 mb-8 mx-auto max-w-6xl border-4 border-gold shadow-2xl relative">
               {/* Free Spins Indicator */}
               {freeSpinsRemaining > 0 && (
                 <div className="text-center mb-6 p-4 bg-gradient-to-r from-pink-600 to-purple-600 rounded-xl border-2 border-pink-400">
@@ -614,20 +692,74 @@ const SlotsGame: React.FC = () => {
                 </button>
               </div>
 
+              {/* Auto-Spin Controls */}
+              <div className="mb-6">
+                <div className="text-center mb-4">
+                  <h4 className="text-xl font-bold text-yellow-400">🔄 Auto-Spin 🔄</h4>
+                  {isAutoSpinning && (
+                    <div className="text-green-400 font-bold text-lg animate-pulse">
+                      Auto-spinning: {autoSpinsRemaining} spins remaining
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex justify-center items-center space-x-3 flex-wrap gap-2">
+                  <button
+                    onClick={() => startAutoSpin(10)}
+                    disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount * 10}
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-blue-500"
+                  >
+                    10x
+                  </button>
+                  <button
+                    onClick={() => startAutoSpin(25)}
+                    disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount * 25}
+                    className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-purple-500"
+                  >
+                    25x
+                  </button>
+                  <button
+                    onClick={() => startAutoSpin(50)}
+                    disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount * 50}
+                    className="bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-pink-500"
+                  >
+                    50x
+                  </button>
+                  <button
+                    onClick={() => startAutoSpin(100)}
+                    disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount * 100}
+                    className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-orange-500"
+                  >
+                    100x
+                  </button>
+                  
+                  {isAutoSpinning && (
+                    <button
+                      onClick={stopAutoSpin}
+                      className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 px-6 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-red-500 animate-pulse"
+                    >
+                      STOP
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Spin Button */}
               <button
                 onClick={spin}
-                disabled={isSpinning || !user || user.balance < betAmount}
+                disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount}
                 className={`w-full py-6 px-8 rounded-xl font-bold text-2xl transition-all duration-300 border-4 ${
-                  isSpinning || !user || user.balance < betAmount
+                  isSpinning || isAutoSpinning || !user || user.balance < betAmount
                     ? 'bg-gray-700 border-gray-600 cursor-not-allowed text-gray-400'
                     : 'bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 hover:from-yellow-600 hover:via-orange-600 hover:to-red-600 border-yellow-400 text-black transform hover:scale-105 shadow-lg hover:shadow-2xl'
                 }`}
                 style={{
-                  boxShadow: !isSpinning && user && user.balance >= betAmount ? '0 0 30px rgba(255, 215, 0, 0.5)' : 'none'
+                  boxShadow: !isSpinning && !isAutoSpinning && user && user.balance >= betAmount ? '0 0 30px rgba(255, 215, 0, 0.5)' : 'none'
                 }}
               >
-                {isSpinning ? '🔮 DIVINING... 🔮' : '✨ CONSULT THE SPIRITS ✨'}
+                {isAutoSpinning ? '� AUTO-SPINNING... 🔄' : 
+                 isSpinning ? '�🔮 DIVINING... 🔮' : 
+                 '✨ CONSULT THE SPIRITS ✨'}
               </button>
             </div>
           </div>

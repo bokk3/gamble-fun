@@ -102,6 +102,13 @@ const Login: React.FC = () => {
           </p>
         </div>
 
+        {/* Daily Login Bonus Banner */}
+        <div className="mt-6 p-4 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-2 border-blue-400 rounded-lg text-center">
+          <div className="text-2xl mb-2">💎</div>
+          <h3 className="text-lg font-bold text-blue-300 mb-1">Daily Login Bonus!</h3>
+          <p className="text-sm text-blue-200">Get $50 free credits every day you log in!</p>
+        </div>
+
         <div className="mt-6 p-4 bg-casino-green/20 border border-casino-green/30 rounded-lg">
           <p className="text-sm text-gray-300 mb-2">
             <strong>Demo Account:</strong>
