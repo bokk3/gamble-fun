@@ -254,7 +254,20 @@ export class ProvablyFairEngine {
     const random = this.hashToFloat(hash);
 
     // Generate crash point using exponential distribution
-    const crashPoint = Math.max(1, Math.floor((99 / (random * 99)) * 100) / 100);
+    // Classic crash game formula: 99 / (100 * random) with house edge
+    let crashPoint = 1.00;
+    
+    if (random > 0) {
+      // Formula creates exponential distribution with house edge
+      // Most crashes between 1x-3x, some higher values possible
+      crashPoint = 0.99 / random;
+      
+      // Ensure minimum 1.00x and cap at reasonable maximum
+      crashPoint = Math.max(1.00, Math.min(crashPoint, 100.00));
+    }
+    
+    // Round to 2 decimal places
+    crashPoint = Math.floor(crashPoint * 100) / 100;
 
     const isWin = cashOutAt <= crashPoint;
     const multiplier = isWin ? cashOutAt : 0;

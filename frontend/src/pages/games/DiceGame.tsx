@@ -27,8 +27,93 @@ const DiceGame: React.FC = () => {
     const [gameHistory, setGameHistory] = useState<GameHistory[]>([]);
   const [diceResult, setDiceResult] = useState<number>(1);
 
+  // Mystical Counter - Progressive XP/Level System
+  const [progressStats, setProgressStats] = useState({
+    totalRolls: 0,
+    totalWagered: 0,
+    totalWon: 0,
+    netProfit: 0,
+    xp: 0,
+    level: 1,
+    levelProgress: 0,
+    bonusMultiplier: 1.0,
+    perfectRolls: 0, // Rolls that win by exactly 1
+    winStreak: 0,
+    bigWins: 0 // Wins with high multipliers
+  });
+
   const minBet = 0.01;
   const maxBet = 50.00;
+
+  // Level and XP System for Dice Game
+  const calculateXP = (betAmount: number, winAmount: number, multiplier: number, isWin: boolean, isPerfectRoll: boolean) => {
+    let xp = Math.floor(betAmount * 5); // Base XP from bet amount (higher for dice precision)
+    
+    if (isWin) {
+      xp += Math.floor(winAmount * 1.5); // Bonus XP from wins
+      if (multiplier >= 2.0) xp += 20; // 2x+ multiplier bonus
+      if (multiplier >= 5.0) xp += 50; // 5x+ multiplier bonus
+      if (multiplier >= 10.0) xp += 100; // 10x+ multiplier bonus
+      if (isPerfectRoll) xp += 75; // Perfect roll bonus
+    }
+    
+    return xp;
+  };
+
+  const getLevelInfo = (level: number) => {
+    const xpRequired = Math.floor(120 * Math.pow(1.25, level - 1));
+    const bonusMultiplier = 1.0 + (level - 1) * 0.03; // 3% bonus per level
+    const levelName = level <= 3 ? "Novice" : 
+                     level <= 8 ? "Gambler" : 
+                     level <= 15 ? "High Roller" : 
+                     level <= 25 ? "Lucky Seven" : 
+                     level <= 40 ? "Fortune Teller" : "Dice Master";
+    
+    return { xpRequired, bonusMultiplier, levelName };
+  };
+
+  const updateProgressTracking = (betAmount: number, winAmount: number, multiplier: number, roll: number, target: number, isOver: boolean) => {
+    const isWin = winAmount > 0;
+    const netChange = winAmount - betAmount;
+    
+    // Check for perfect roll (winning by exactly 1)
+    const isPerfectRoll = isWin && ((isOver && roll === target + 1) || (!isOver && roll === target - 1));
+    
+    const earnedXP = calculateXP(betAmount, winAmount, multiplier, isWin, isPerfectRoll);
+
+    setProgressStats(prev => {
+      const newXP = prev.xp + earnedXP;
+      const currentLevel = prev.level;
+      const { xpRequired } = getLevelInfo(currentLevel);
+      
+      let newLevel = currentLevel;
+      let remainingXP = newXP;
+      
+      // Check for level ups
+      while (remainingXP >= xpRequired && newLevel < 100) {
+        remainingXP -= xpRequired;
+        newLevel += 1;
+      }
+      
+      const { bonusMultiplier } = getLevelInfo(newLevel);
+      const progress = newLevel < 100 ? (remainingXP / getLevelInfo(newLevel).xpRequired) * 100 : 100;
+
+      return {
+        ...prev,
+        totalRolls: prev.totalRolls + 1,
+        totalWagered: prev.totalWagered + betAmount,
+        totalWon: prev.totalWon + winAmount,
+        netProfit: prev.netProfit + netChange,
+        xp: newXP,
+        level: newLevel,
+        levelProgress: progress,
+        bonusMultiplier,
+        perfectRolls: prev.perfectRolls + (isPerfectRoll ? 1 : 0),
+        winStreak: isWin ? prev.winStreak + 1 : 0,
+        bigWins: prev.bigWins + (multiplier >= 5.0 && isWin ? 1 : 0)
+      };
+    });
+  };
 
   // Calculate win chance and multiplier
   const winChance = isOver ? (100 - target) : target;
@@ -67,6 +152,9 @@ const DiceGame: React.FC = () => {
           setDiceResult(roll);
           setLastWin(result.data?.winAmount || 0);
           updateBalance(result.data?.newBalance || 0);
+          
+          // Update progress tracking
+          updateProgressTracking(betAmount, result.data?.winAmount || 0, result.data?.multiplier || 0, roll, target, isOver);
           
           // Play win sound if applicable
           if (result.data?.winAmount > 0) {
@@ -128,9 +216,31 @@ const DiceGame: React.FC = () => {
             <h1 className="text-3xl font-bold text-yellow-400">🎲 Dice Roll</h1>
             <p className="text-white opacity-75">Predict the roll and win big!</p>
           </div>
-          <div className="text-right text-white">
-            <div className="text-sm opacity-75">Balance</div>
-            <div className="text-xl font-bold text-green-400">${user?.balance?.toFixed(2) || '0.00'}</div>
+          <div className="text-right text-white space-y-2">
+            {/* Level Badge */}
+            {progressStats.level > 1 && (
+              <div className="bg-gradient-to-r from-yellow-600 to-orange-600 px-4 py-2 rounded-full border-2 border-yellow-400 mb-2">
+                <div className="text-xs font-bold">LEVEL {progressStats.level}</div>
+                <div className="text-xs opacity-75">{getLevelInfo(progressStats.level).levelName}</div>
+              </div>
+            )}
+            
+            <div className="flex items-center space-x-6">
+              <div>
+                <div className="text-sm opacity-75">Balance</div>
+                <div className="text-xl font-bold text-green-400">${user?.balance?.toFixed(2) || '0.00'}</div>
+              </div>
+              <div>
+                <div className="text-sm opacity-75">Level</div>
+                <div className="text-lg font-bold text-yellow-400">{progressStats.level}</div>
+              </div>
+              {progressStats.totalRolls > 0 && (
+                <div>
+                  <div className="text-sm opacity-75">Win Streak</div>
+                  <div className="text-lg font-bold text-orange-400">{progressStats.winStreak}</div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -293,6 +403,46 @@ const DiceGame: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Mystical Progress Stats */}
+        {progressStats.totalRolls > 0 && (
+          <div className="bg-gradient-to-r from-yellow-900 to-orange-900 rounded-xl p-6 border border-yellow-500 mt-6">
+            <div className="flex items-center justify-between text-white mb-4">
+              <h3 className="text-xl font-bold">🎲 Dice Master Progress</h3>
+              <div className="flex items-center space-x-2">
+                <div className="text-sm">Level {progressStats.level}:</div>
+                <div className="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-yellow-400 to-orange-400 transition-all duration-300"
+                    style={{ width: `${Math.min(progressStats.levelProgress, 100)}%` }}
+                  ></div>
+                </div>
+                <div className="text-xs">{Math.floor(progressStats.levelProgress)}%</div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-white">
+              <div className="bg-black bg-opacity-30 rounded-lg p-3">
+                <div className="text-sm opacity-75">Total Rolls</div>
+                <div className="text-xl font-bold text-yellow-400">{progressStats.totalRolls}</div>
+              </div>
+              <div className="bg-black bg-opacity-30 rounded-lg p-3">
+                <div className="text-sm opacity-75">Perfect Rolls</div>
+                <div className="text-xl font-bold text-green-400">{progressStats.perfectRolls}</div>
+              </div>
+              <div className="bg-black bg-opacity-30 rounded-lg p-3">
+                <div className="text-sm opacity-75">Big Wins (5x+)</div>
+                <div className="text-xl font-bold text-purple-400">{progressStats.bigWins}</div>
+              </div>
+              <div className="bg-black bg-opacity-30 rounded-lg p-3">
+                <div className="text-sm opacity-75">Net Profit</div>
+                <div className={`text-xl font-bold ${progressStats.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {progressStats.netProfit >= 0 ? '+' : ''}${progressStats.netProfit.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Game History */}
         <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl border border-white border-opacity-20 p-6 mt-6">

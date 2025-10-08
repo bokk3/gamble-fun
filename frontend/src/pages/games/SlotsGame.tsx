@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { gameService } from '../../services/gameService';
 import { audioService } from '../../services/audioService';
+import { bonusService, BonusStats } from '../../services/bonusService';
+import BonusDisplay from '../../components/BonusDisplay';
 
 interface GameHistoryItem {
   reels: string[][];
@@ -79,6 +81,21 @@ const SlotsGame: React.FC = () => {
   const [isAutoSpinning, setIsAutoSpinning] = useState(false);
   const [autoSpinsRemaining, setAutoSpinsRemaining] = useState(0);
   const [handlePulled, setHandlePulled] = useState(false);
+  
+  // Auto-Spin Progress Tracking
+  const [autoSpinStats, setAutoSpinStats] = useState({
+    totalSpins: 0,
+    totalBet: 0,
+    totalWon: 0,
+    netProfit: 0,
+    level: 1,
+    xp: 0,
+    xpToNextLevel: 100,
+    bonusMultiplier: 1.0,
+    streak: 0,
+    bigWins: 0,
+    startingBalance: 0
+  });
 
   // Enhanced symbol set with special symbols
   const symbols = {
@@ -367,6 +384,27 @@ const SlotsGame: React.FC = () => {
           setMessageType("lose");
         }
 
+        // Update auto-spin progress tracking
+        updateAutoSpinProgress(betAmount, totalWinAmount);
+
+        // Process bonus rewards for this spin
+        if (totalWinAmount > 0) {
+          const isSpecialWin = bonusFeatures.bonus || bonusFeatures.freeSpins > 0;
+          const multiplier = wins.length > 0 ? Math.max(...wins.map((w: any) => w.multiplier)) : 0;
+          bonusService.processGameResult(
+            1, // Slots game ID
+            'slots',
+            betAmount,
+            totalWinAmount,
+            multiplier,
+            isSpecialWin
+          ).then(bonusResult => {
+            if (bonusResult.bonusAwarded > 0) {
+              console.log(`🎁 Bonus awarded: ${bonusResult.bonusAwarded} tokens - ${bonusResult.reason}`);
+            }
+          }).catch(err => console.error('Error processing bonus:', err));
+        }
+
         // Update balance from server response  
         console.log('Full server response:', result);
         console.log('Server data:', result.data);
@@ -396,7 +434,7 @@ const SlotsGame: React.FC = () => {
           winLines: wins,
           bonusTriggered: bonusFeatures.bonus || bonusFeatures.freeSpins > 0,
           timestamp: new Date()
-        }, ...prev.slice(0, 9)]);
+        }, ...prev.slice(0, 49)]); // Keep 50 most recent spins
         
         setIsSpinning(false);
       }, spinDuration);
@@ -442,17 +480,108 @@ const SlotsGame: React.FC = () => {
   const startAutoSpin = (spins: number) => {
     if (isSpinning || !user || user.balance < betAmount) return;
     
+    // Initialize auto-spin tracking
+    setAutoSpinStats({
+      totalSpins: 0,
+      totalBet: 0,
+      totalWon: 0,
+      netProfit: 0,
+      level: 1,
+      xp: 0,
+      xpToNextLevel: 100,
+      bonusMultiplier: 1.0,
+      streak: 0,
+      bigWins: 0,
+      startingBalance: user.balance
+    });
+    
     setAutoSpinsRemaining(spins);
     setIsAutoSpinning(true);
-    setMessage(`🔄 Auto-spinning ${spins} times! The spirits work tirelessly...`);
+    setMessage(`🔄 Auto-spinning ${spins} times! Building XP and levels...`);
     setMessageType("auto");
   };
 
   const stopAutoSpin = () => {
     setIsAutoSpinning(false);
     setAutoSpinsRemaining(0);
-    setMessage("Auto-spin stopped. The spirits await your command...");
-    setMessageType("");
+    
+    // Show final auto-spin report
+    if (autoSpinStats.totalSpins > 0) {
+      const netResult = autoSpinStats.netProfit;
+      const resultText = netResult >= 0 ? `profit of $${netResult.toFixed(2)}` : `loss of $${Math.abs(netResult).toFixed(2)}`;
+      setMessage(`🔄 Auto-spin complete! Level ${autoSpinStats.level} reached with ${resultText}!`);
+      setMessageType(netResult >= 0 ? "win" : "lose");
+    } else {
+      setMessage("Auto-spin stopped. The spirits await your command...");
+      setMessageType("");
+    }
+  };
+
+  // Level and XP System
+  const calculateXP = (betAmount: number, winAmount: number, isWin: boolean) => {
+    let xp = Math.floor(betAmount * 2); // Base XP from bet amount
+    
+    if (isWin) {
+      xp += Math.floor(winAmount * 1.5); // Bonus XP from wins
+      if (winAmount >= betAmount * 10) xp += 50; // Big win bonus
+      if (winAmount >= betAmount * 25) xp += 100; // Mega win bonus
+    }
+    
+    return xp;
+  };
+
+  const getLevelInfo = (level: number) => {
+    const xpRequired = Math.floor(100 * Math.pow(1.5, level - 1));
+    const bonusMultiplier = 1.0 + (level - 1) * 0.05; // 5% bonus per level
+    const levelName = level <= 5 ? "Novice" : 
+                     level <= 10 ? "Apprentice" : 
+                     level <= 20 ? "Mystic" : 
+                     level <= 35 ? "Master" : 
+                     level <= 50 ? "Grandmaster" : "Legendary";
+    
+    return { xpRequired, bonusMultiplier, levelName };
+  };
+
+  const updateAutoSpinProgress = (betAmount: number, winAmount: number) => {
+    if (!isAutoSpinning) return;
+
+    const isWin = winAmount > 0;
+    const netChange = winAmount - betAmount;
+    const earnedXP = calculateXP(betAmount, winAmount, isWin);
+    
+    setAutoSpinStats(prev => {
+      const newStats = {
+        ...prev,
+        totalSpins: prev.totalSpins + 1,
+        totalBet: prev.totalBet + betAmount,
+        totalWon: prev.totalWon + winAmount,
+        netProfit: prev.netProfit + netChange,
+        xp: prev.xp + earnedXP,
+        streak: isWin ? prev.streak + 1 : 0,
+        bigWins: winAmount >= betAmount * 10 ? prev.bigWins + 1 : prev.bigWins
+      };
+
+      // Check for level up
+      const currentLevel = getLevelInfo(newStats.level);
+      if (newStats.xp >= newStats.xpToNextLevel) {
+        const newLevel = newStats.level + 1;
+        const nextLevelInfo = getLevelInfo(newLevel);
+        
+        // Level up message
+        setMessage(`🌟 LEVEL UP! ${nextLevelInfo.levelName} Level ${newLevel} reached! Bonus multiplier: ${nextLevelInfo.bonusMultiplier.toFixed(2)}x`);
+        setMessageType("bonus");
+        
+        return {
+          ...newStats,
+          level: newLevel,
+          xp: newStats.xp - newStats.xpToNextLevel,
+          xpToNextLevel: nextLevelInfo.xpRequired,
+          bonusMultiplier: nextLevelInfo.bonusMultiplier
+        };
+      }
+
+      return newStats;
+    });
   };
 
   const getWinType = (reels: string[][]) => {
@@ -472,40 +601,13 @@ const SlotsGame: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-black p-4">
-      {/* Header */}
+      {/* Simplified Header */}
       <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="bg-purple-700 hover:bg-purple-600 px-6 py-3 rounded-lg text-white transition-all duration-300 border border-purple-500 hover:border-purple-400"
-          >
-            ← Back to Casino
-          </button>
-          <div className="text-center">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 via-purple-300 to-pink-400 bg-clip-text text-transparent mb-2">
-              🔮 Fortune Teller Slots 🔮
-            </h1>
-            <p className="text-purple-200 text-lg">The mystical reels reveal your destiny...</p>
-          </div>
-          <div className="text-right text-white">
-            <div className="text-sm opacity-75">Balance</div>
-            <div className="flex items-center space-x-2">
-              <div className="text-2xl font-bold text-green-400">${user?.balance?.toFixed(2) || '0.00'}</div>
-              {isBalanceLoading && (
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-green-400 border-t-transparent"></div>
-              )}
-              <button
-                onClick={() => {
-                  audioService.playButtonClick();
-                  refreshBalance();
-                }}
-                className="text-green-400 hover:text-green-300 transition-colors"
-                title="Refresh Balance"
-              >
-                🔄
-              </button>
-            </div>
-          </div>
+        <div className="text-center">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 via-purple-300 to-pink-400 bg-clip-text text-transparent mb-2">
+            🔮 Fortune Teller Slots 🔮
+          </h1>
+          <p className="text-purple-200 text-lg">The mystical reels reveal your destiny...</p>
         </div>
       </div>
 
@@ -525,39 +627,59 @@ const SlotsGame: React.FC = () => {
 
       {/* Main Game Area */}
       <div className="max-w-6xl mx-auto">
-        <div className="bg-gradient-to-b from-purple-900 to-indigo-900 rounded-2xl border-2 border-purple-500 p-8 shadow-2xl">
-          
-          {/* Slot Machine */}
-          <div className="text-center mb-8 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Bonus Display Sidebar */}
+          <div className="lg:col-span-1">
+            <BonusDisplay 
+              gameId={1} 
+              showHistory={true}
+              className="mb-4"
+            />
+          </div>
+
+          {/* Main Slots Game */}
+          <div className="lg:col-span-3">
+            <div className="bg-gradient-to-b from-purple-900 to-indigo-900 rounded-2xl border-2 border-purple-500 p-8 shadow-2xl">
+              
+              {/* Slot Machine with Handle Container */}
+          <div className="text-center mb-8 relative overflow-visible px-16">
             {/* Slot Machine Handle */}
-            <div className="absolute -right-4 top-1/2 transform -translate-y-1/2 z-10">
+            <div className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10">
               <div className="relative">
                 {/* Handle Base */}
-                <div className="w-8 h-32 bg-gradient-to-b from-yellow-600 to-yellow-800 rounded-full border-4 border-yellow-400 shadow-xl"></div>
+                <div className="w-10 h-40 bg-gradient-to-b from-yellow-600 to-yellow-800 rounded-full border-4 border-yellow-400 shadow-xl"></div>
                 
                 {/* Handle Lever */}
                 <button
                   onClick={pullHandle}
                   disabled={isSpinning || !user || user.balance < betAmount}
-                  className={`absolute -top-6 -left-4 w-16 h-20 transition-all duration-300 ${
-                    handlePulled ? 'translate-y-8' : ''
+                  className={`absolute -top-8 -left-6 w-20 h-24 transition-all duration-300 ${
+                    handlePulled ? 'translate-y-10' : ''
                   } ${
                     isSpinning || !user || user.balance < betAmount
                       ? 'cursor-not-allowed opacity-50'
                       : 'cursor-pointer hover:scale-110 active:scale-95'
                   }`}
+                  title="Pull Handle to Spin!"
                 >
                   <div className="w-full h-full bg-gradient-to-r from-red-600 to-red-800 rounded-full border-4 border-red-400 shadow-2xl flex items-center justify-center">
-                    <div className="w-8 h-8 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full border-2 border-yellow-300"></div>
+                    <div className="w-10 h-10 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full border-2 border-yellow-300 flex items-center justify-center">
+                      <span className="text-black font-bold text-xs">PULL</span>
+                    </div>
                   </div>
                 </button>
                 
+                {/* Handle Label */}
+                <div className="absolute -bottom-4 -left-2 text-yellow-400 font-bold text-sm whitespace-nowrap">
+                  🎰 PULL ME!
+                </div>
+                
                 {/* Handle Shadow */}
-                <div className="absolute top-0 left-2 w-4 h-40 bg-black opacity-20 rounded-full -z-10"></div>
+                <div className="absolute top-0 left-2 w-6 h-48 bg-black opacity-20 rounded-full -z-10"></div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-b from-yellow-600 via-purple-700 to-black rounded-3xl p-10 mb-8 mx-auto max-w-6xl border-4 border-gold shadow-2xl relative">
+            <div className="bg-gradient-to-b from-yellow-600 via-purple-700 to-black rounded-3xl p-10 mb-8 mx-auto max-w-5xl border-4 border-gold shadow-2xl relative">
               {/* Free Spins Indicator */}
               {freeSpinsRemaining > 0 && (
                 <div className="text-center mb-6 p-4 bg-gradient-to-r from-pink-600 to-purple-600 rounded-xl border-2 border-pink-400">
@@ -693,52 +815,92 @@ const SlotsGame: React.FC = () => {
               </div>
 
               {/* Auto-Spin Controls */}
-              <div className="mb-6">
+              <div className="mb-6 bg-gradient-to-r from-indigo-800/50 to-purple-800/50 rounded-xl p-6 border-2 border-purple-500">
                 <div className="text-center mb-4">
-                  <h4 className="text-xl font-bold text-yellow-400">🔄 Auto-Spin 🔄</h4>
+                  <h4 className="text-2xl font-bold text-yellow-400 mb-2">🔄 AUTO-SPIN MAGIC 🔄</h4>
+                  <p className="text-purple-200 text-sm mb-3">Let the spirits spin for you automatically!</p>
                   {isAutoSpinning && (
-                    <div className="text-green-400 font-bold text-lg animate-pulse">
-                      Auto-spinning: {autoSpinsRemaining} spins remaining
+                    <div className="bg-green-600/30 border border-green-400 rounded-lg p-4 mb-4">
+                      <div className="text-green-400 font-bold text-lg animate-pulse mb-3">
+                        ✨ Auto-spinning: {autoSpinsRemaining} spins remaining ✨
+                      </div>
+                      
+                      {/* Progress Stats */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div className="bg-blue-600/30 rounded-lg p-2">
+                          <div className="text-blue-300 text-xs">Level</div>
+                          <div className="text-blue-400 font-bold text-lg">{autoSpinStats.level}</div>
+                          <div className="text-blue-200 text-xs">{getLevelInfo(autoSpinStats.level).levelName}</div>
+                        </div>
+                        <div className="bg-yellow-600/30 rounded-lg p-2">
+                          <div className="text-yellow-300 text-xs">XP</div>
+                          <div className="text-yellow-400 font-bold text-sm">{autoSpinStats.xp}/{autoSpinStats.xpToNextLevel}</div>
+                          <div className="w-full bg-yellow-800 rounded-full h-2 mt-1">
+                            <div 
+                              className="bg-yellow-400 h-2 rounded-full transition-all duration-300" 
+                              style={{width: `${(autoSpinStats.xp / autoSpinStats.xpToNextLevel) * 100}%`}}
+                            ></div>
+                          </div>
+                        </div>
+                        <div className="bg-green-600/30 rounded-lg p-2">
+                          <div className="text-green-300 text-xs">Net P/L</div>
+                          <div className={`font-bold text-lg ${autoSpinStats.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {autoSpinStats.netProfit >= 0 ? '+' : ''}${autoSpinStats.netProfit.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="bg-purple-600/30 rounded-lg p-2">
+                          <div className="text-purple-300 text-xs">Bonus</div>
+                          <div className="text-purple-400 font-bold text-lg">{autoSpinStats.bonusMultiplier.toFixed(2)}x</div>
+                          <div className="text-purple-200 text-xs">Multiplier</div>
+                        </div>
+                      </div>
+                      
+                      {/* Additional Stats */}
+                      <div className="mt-3 text-center text-sm text-gray-300">
+                        Spins: {autoSpinStats.totalSpins} | 
+                        Streak: {autoSpinStats.streak} | 
+                        Big Wins: {autoSpinStats.bigWins}
+                      </div>
                     </div>
                   )}
                 </div>
                 
-                <div className="flex justify-center items-center space-x-3 flex-wrap gap-2">
+                <div className="flex justify-center items-center space-x-2 flex-wrap gap-3">
                   <button
                     onClick={() => startAutoSpin(10)}
                     disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount * 10}
-                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-blue-500"
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-600 disabled:to-gray-700 px-6 py-3 rounded-xl text-white font-bold transition-all duration-300 border-2 border-blue-400 hover:scale-105 shadow-lg"
                   >
-                    10x
+                    🔟 10 SPINS
                   </button>
                   <button
                     onClick={() => startAutoSpin(25)}
                     disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount * 25}
-                    className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-purple-500"
+                    className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 px-6 py-3 rounded-xl text-white font-bold transition-all duration-300 border-2 border-purple-400 hover:scale-105 shadow-lg"
                   >
-                    25x
+                    🌟 25 SPINS
                   </button>
                   <button
                     onClick={() => startAutoSpin(50)}
                     disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount * 50}
-                    className="bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-pink-500"
+                    className="bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 disabled:from-gray-600 disabled:to-gray-700 px-6 py-3 rounded-xl text-white font-bold transition-all duration-300 border-2 border-pink-400 hover:scale-105 shadow-lg"
                   >
-                    50x
+                    💫 50 SPINS
                   </button>
                   <button
                     onClick={() => startAutoSpin(100)}
                     disabled={isSpinning || isAutoSpinning || !user || user.balance < betAmount * 100}
-                    className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-orange-500"
+                    className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:from-gray-600 disabled:to-gray-700 px-6 py-3 rounded-xl text-white font-bold transition-all duration-300 border-2 border-orange-400 hover:scale-105 shadow-lg"
                   >
-                    100x
+                    🚀 100 SPINS
                   </button>
                   
                   {isAutoSpinning && (
                     <button
                       onClick={stopAutoSpin}
-                      className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 px-6 py-2 rounded-lg text-white font-bold transition-all duration-300 border border-red-500 animate-pulse"
+                      className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 px-8 py-3 rounded-xl text-white font-bold transition-all duration-300 border-2 border-red-400 animate-pulse shadow-xl transform hover:scale-110"
                     >
-                      STOP
+                      ⛔ STOP AUTO-SPIN
                     </button>
                   )}
                 </div>
@@ -765,58 +927,60 @@ const SlotsGame: React.FC = () => {
           </div>
         </div>
 
-        {/* Game Info Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-          {/* Paytable */}
+        {/* Complete History - Full Width */}
+        <div className="mt-8">
           <div className="bg-gradient-to-b from-purple-900 to-indigo-900 rounded-xl border-2 border-purple-500 p-6">
-            <h3 className="text-2xl font-bold text-yellow-400 mb-6 text-center">💰 Sacred Payouts 💰</h3>
-            <div className="space-y-3">
-              {allSymbols.map((symbol: string, index: number) => (
-                <div key={index} className="flex justify-between items-center text-white bg-black bg-opacity-30 rounded-lg p-3 border border-purple-700">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-3xl">{symbol}</span>
-                    <span className="text-3xl">{symbol}</span>
-                    <span className="text-3xl">{symbol}</span>
-                    <span className="text-3xl">{symbol}</span>
-                    <span className="text-3xl">{symbol}</span>
-                  </div>
-                  <span className="font-bold text-yellow-400 text-xl">{payouts[symbol.repeat(5)] || 100}x</span>
-                </div>
-              ))}
-              <div className="border-t-2 border-purple-600 pt-4 mt-4">
-                <div className="flex justify-between items-center text-white bg-green-800 bg-opacity-50 rounded-lg p-3 border border-green-600">
-                  <span className="text-lg">Any Triple Match</span>
-                  <span className="font-bold text-green-400 text-xl">15x - 50x</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent History */}
-          <div className="bg-gradient-to-b from-purple-900 to-indigo-900 rounded-xl border-2 border-purple-500 p-6">
-            <h3 className="text-2xl font-bold text-yellow-400 mb-6 text-center">📊 Mystical History 📊</h3>
-            <div className="space-y-3 max-h-80 overflow-y-auto">
+            <h3 className="text-3xl font-bold text-yellow-400 mb-6 text-center">� Complete Mystical History 📊</h3>
+            <p className="text-purple-200 text-center mb-6">Your complete spin history - every consultation with the spirits</p>
+            <div className="space-y-3 max-h-screen overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-purple-600 scrollbar-track-purple-900">
               {gameHistory.length === 0 ? (
                 <div className="text-purple-200 text-center py-8 bg-black bg-opacity-30 rounded-lg border border-purple-700">
                   The spirits await your first consultation...
                 </div>
               ) : (
                 gameHistory.map((game, index) => (
-                  <div key={index} className="flex justify-between items-center bg-black bg-opacity-50 rounded-lg p-4 border border-purple-700">
-                    <div className="flex items-center space-x-1">
-                      {game.reels.map((reel: string[], idx: number) => 
-                        reel.map((symbol: string, symbolIdx: number) => (
-                          <span key={`${idx}-${symbolIdx}`} className="text-2xl">{symbol}</span>
-                        ))
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <div className={`font-bold text-lg ${game.winAmount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {game.winAmount > 0 ? `+$${game.winAmount.toFixed(2)}` : `-$${game.betAmount.toFixed(2)}`}
+                  <div key={index} className="bg-black bg-opacity-50 rounded-lg p-4 border border-purple-700 hover:border-purple-500 transition-all duration-200">
+                    <div className="flex justify-between items-center">
+                      <div className="flex-1">
+                        {/* Spin Number and Time */}
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-purple-300 text-sm font-medium">
+                            Spin #{gameHistory.length - index}
+                          </span>
+                          <span className="text-purple-400 text-xs">
+                            {game.timestamp.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        
+                        {/* Reels Display */}
+                        <div className="flex items-center justify-center space-x-1 mb-3 bg-purple-900/30 rounded-lg p-2">
+                          {game.reels.map((reel: string[], idx: number) => (
+                            <div key={idx} className="flex flex-col space-y-1">
+                              {reel.map((symbol: string, symbolIdx: number) => (
+                                <span key={`${idx}-${symbolIdx}`} className="text-lg">{symbol}</span>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Bet and Result Info */}
+                        <div className="flex justify-between items-center">
+                          <div className="text-sm text-gray-300">
+                            Bet: <span className="text-yellow-400 font-medium">${game.betAmount.toFixed(2)}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className={`font-bold text-lg ${game.winAmount > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {game.winAmount > 0 ? `+$${game.winAmount.toFixed(2)}` : `$0.00`}
+                            </div>
+                            {game.multiplier > 0 && (
+                              <div className="text-sm text-yellow-400 font-bold">{game.multiplier.toFixed(2)}x</div>
+                            )}
+                            {game.bonusTriggered && (
+                              <div className="text-xs text-pink-400">🎁 BONUS!</div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      {game.multiplier > 0 && (
-                        <div className="text-sm text-yellow-400">{game.multiplier}x</div>
-                      )}
                     </div>
                   </div>
                 ))
@@ -825,22 +989,51 @@ const SlotsGame: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="mt-8 bg-gradient-to-r from-purple-800 to-indigo-800 rounded-xl border-2 border-purple-500 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-            <div>
-              <div className="text-3xl font-bold text-green-400">${totalWon.toFixed(2)}</div>
-              <div className="text-purple-200">Total Mystical Wins</div>
+        {/* Paytable */}
+        <div className="mt-8">
+          <div className="bg-gradient-to-b from-purple-900 to-indigo-900 rounded-xl border-2 border-purple-500 p-6">
+            <h3 className="text-2xl font-bold text-yellow-400 mb-6 text-center">💰 Sacred Payouts 💰</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {allSymbols.map((symbol: string, index: number) => (
+                <div key={index} className="flex justify-between items-center text-white bg-black bg-opacity-30 rounded-lg p-3 border border-purple-700">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">{symbol}</span>
+                    <span className="text-2xl">{symbol}</span>
+                    <span className="text-2xl">{symbol}</span>
+                    <span className="text-2xl">{symbol}</span>
+                    <span className="text-2xl">{symbol}</span>
+                  </div>
+                  <span className="font-bold text-yellow-400 text-lg">{payouts[symbol.repeat(5)] || 100}x</span>
+                </div>
+              ))}
             </div>
-            <div>
-              <div className="text-3xl font-bold text-yellow-400">{gameHistory.length}</div>
-              <div className="text-purple-200">Spiritual Consultations</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-blue-400">
-                {gameHistory.length > 0 ? `${((gameHistory.filter(g => g.winAmount > 0).length / gameHistory.length) * 100).toFixed(1)}%` : '0%'}
+            <div className="border-t-2 border-purple-600 pt-4 mt-4">
+              <div className="flex justify-between items-center text-white bg-green-800 bg-opacity-50 rounded-lg p-3 border border-green-600">
+                <span className="text-lg">Any Triple Match</span>
+                <span className="font-bold text-green-400 text-xl">15x - 50x</span>
               </div>
-              <div className="text-purple-200">Divine Success Rate</div>
+            </div>
+          </div>
+        </div>
+
+            {/* Stats */}
+            <div className="mt-8 bg-gradient-to-r from-purple-800 to-indigo-800 rounded-xl border-2 border-purple-500 p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                <div>
+                  <div className="text-3xl font-bold text-green-400">${totalWon.toFixed(2)}</div>
+                  <div className="text-purple-200">Total Mystical Wins</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-yellow-400">{gameHistory.length}</div>
+                  <div className="text-purple-200">Spiritual Consultations</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-blue-400">
+                    {gameHistory.length > 0 ? `${((gameHistory.filter(g => g.winAmount > 0).length / gameHistory.length) * 100).toFixed(1)}%` : '0%'}
+                  </div>
+                  <div className="text-purple-200">Divine Success Rate</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

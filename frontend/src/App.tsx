@@ -10,6 +10,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import ProfileSettings from './pages/ProfileSettings';
 import SlotsGame from './pages/games/SlotsGame';
 import DiceGame from './pages/games/DiceGame';
 import CrashGame from './pages/games/CrashGame';
@@ -40,6 +41,11 @@ function App() {
                   <Route path="/dashboard" element={
                     <ProtectedRoute>
                       <Dashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/profile" element={
+                    <ProtectedRoute>
+                      <ProfileSettings />
                     </ProtectedRoute>
                   } />
                   <Route path="/games/slots" element={

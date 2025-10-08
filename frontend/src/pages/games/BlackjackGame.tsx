@@ -49,8 +49,89 @@ const BlackjackGame: React.FC = () => {
   const [canDoubleDown, setCanDoubleDown] = useState(false);
   const [hasDoubledDown, setHasDoubledDown] = useState(false);
 
+  // Mystical Counter - Progressive XP/Level System
+  const [progressStats, setProgressStats] = useState({
+    totalHands: 0,
+    totalWagered: 0,
+    totalWon: 0,
+    netProfit: 0,
+    xp: 0,
+    level: 1,
+    levelProgress: 0,
+    bonusMultiplier: 1.0,
+    blackjacks: 0,
+    perfectDoubles: 0, // Double down wins
+    winStreak: 0
+  });
+
   const minBet = 1.00;
   const maxBet = 500.00;
+
+  // Level and XP System for Blackjack
+  const calculateXP = (betAmount: number, winAmount: number, isBlackjack: boolean, isDoubleDown: boolean, isWin: boolean) => {
+    let xp = Math.floor(betAmount * 3); // Base XP from bet amount
+    
+    if (isWin) {
+      xp += Math.floor(winAmount * 1.5); // Bonus XP from wins
+      if (isBlackjack) xp += 100; // Blackjack bonus
+      if (isDoubleDown) xp += 50; // Double down bonus
+    }
+    
+    return xp;
+  };
+
+  const getLevelInfo = (level: number) => {
+    const xpRequired = Math.floor(180 * Math.pow(1.35, level - 1));
+    const bonusMultiplier = 1.0 + (level - 1) * 0.025; // 2.5% bonus per level
+    const levelName = level <= 3 ? "Rookie" : 
+                     level <= 8 ? "Card Counter" : 
+                     level <= 15 ? "High Roller" : 
+                     level <= 25 ? "Blackjack Pro" : 
+                     level <= 40 ? "Casino Legend" : "Twenty-One Master";
+    
+    return { xpRequired, bonusMultiplier, levelName };
+  };
+
+  const updateProgressTracking = (betAmount: number, winAmount: number, result: string, isDoubleDown: boolean) => {
+    const isWin = winAmount > 0;
+    const isBlackjack = result === 'blackjack';
+    const netChange = winAmount - betAmount;
+    
+    const earnedXP = calculateXP(betAmount, winAmount, isBlackjack, isDoubleDown, isWin);
+
+    setProgressStats(prev => {
+      const newXP = prev.xp + earnedXP;
+      const currentLevel = prev.level;
+      const { xpRequired } = getLevelInfo(currentLevel);
+      
+      let newLevel = currentLevel;
+      let remainingXP = newXP;
+      
+      // Check for level ups
+      while (remainingXP >= xpRequired && newLevel < 100) {
+        remainingXP -= xpRequired;
+        newLevel += 1;
+      }
+      
+      const { bonusMultiplier } = getLevelInfo(newLevel);
+      const progress = newLevel < 100 ? (remainingXP / getLevelInfo(newLevel).xpRequired) * 100 : 100;
+
+      return {
+        ...prev,
+        totalHands: prev.totalHands + 1,
+        totalWagered: prev.totalWagered + betAmount,
+        totalWon: prev.totalWon + winAmount,
+        netProfit: prev.netProfit + netChange,
+        xp: newXP,
+        level: newLevel,
+        levelProgress: progress,
+        bonusMultiplier,
+        blackjacks: prev.blackjacks + (isBlackjack ? 1 : 0),
+        perfectDoubles: prev.perfectDoubles + (isDoubleDown && isWin ? 1 : 0),
+        winStreak: isWin ? prev.winStreak + 1 : 0
+      };
+    });
+  };
 
   // Initialize a new deck of cards
   const createDeck = (): Card[] => {
@@ -325,6 +406,9 @@ const BlackjackGame: React.FC = () => {
     
     setLastWin(winAmount);
     
+    // Update progress tracking
+    updateProgressTracking(betAmount, winAmount, result, hasDoubledDown);
+    
     // Send result to backend for balance update
     try {
       const backendResult = await gameService.placeBet(2, betAmount);
@@ -390,9 +474,31 @@ const BlackjackGame: React.FC = () => {
             </h1>
             <p className="text-green-200 text-lg">Beat the dealer without going over 21!</p>
           </div>
-          <div className="text-right text-white">
-            <div className="text-sm opacity-75">Balance</div>
-            <div className="text-2xl font-bold text-green-400">${user?.balance?.toFixed(2) || '0.00'}</div>
+          <div className="text-right text-white space-y-2">
+            {/* Level Badge */}
+            {progressStats.level > 1 && (
+              <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 rounded-full border-2 border-green-400 mb-2">
+                <div className="text-xs font-bold">LEVEL {progressStats.level}</div>
+                <div className="text-xs opacity-75">{getLevelInfo(progressStats.level).levelName}</div>
+              </div>
+            )}
+            
+            <div className="flex items-center space-x-6">
+              <div>
+                <div className="text-sm opacity-75">Balance</div>
+                <div className="text-2xl font-bold text-green-400">${user?.balance?.toFixed(2) || '0.00'}</div>
+              </div>
+              <div>
+                <div className="text-sm opacity-75">Level</div>
+                <div className="text-lg font-bold text-green-400">{progressStats.level}</div>
+              </div>
+              {progressStats.totalHands > 0 && (
+                <div>
+                  <div className="text-sm opacity-75">Blackjacks</div>
+                  <div className="text-lg font-bold text-yellow-400">{progressStats.blackjacks}</div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -596,6 +702,46 @@ const BlackjackGame: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Mystical Progress Stats */}
+          {progressStats.totalHands > 0 && (
+            <div className="bg-gradient-to-r from-green-900 to-emerald-900 rounded-xl p-6 border border-green-500 mb-6">
+              <div className="flex items-center justify-between text-white mb-4">
+                <h3 className="text-xl font-bold">🂡 Card Master Progress</h3>
+                <div className="flex items-center space-x-2">
+                  <div className="text-sm">Level {progressStats.level}:</div>
+                  <div className="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-green-400 to-emerald-400 transition-all duration-300"
+                      style={{ width: `${Math.min(progressStats.levelProgress, 100)}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-xs">{Math.floor(progressStats.levelProgress)}%</div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-white">
+                <div className="bg-black bg-opacity-30 rounded-lg p-3">
+                  <div className="text-sm opacity-75">Total Hands</div>
+                  <div className="text-xl font-bold text-green-400">{progressStats.totalHands}</div>
+                </div>
+                <div className="bg-black bg-opacity-30 rounded-lg p-3">
+                  <div className="text-sm opacity-75">Blackjacks</div>
+                  <div className="text-xl font-bold text-yellow-400">{progressStats.blackjacks}</div>
+                </div>
+                <div className="bg-black bg-opacity-30 rounded-lg p-3">
+                  <div className="text-sm opacity-75">Perfect Doubles</div>
+                  <div className="text-xl font-bold text-blue-400">{progressStats.perfectDoubles}</div>
+                </div>
+                <div className="bg-black bg-opacity-30 rounded-lg p-3">
+                  <div className="text-sm opacity-75">Net Profit</div>
+                  <div className={`text-xl font-bold ${progressStats.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {progressStats.netProfit >= 0 ? '+' : ''}${progressStats.netProfit.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Game History */}
           <div className="bg-gradient-to-b from-green-900 to-green-800 rounded-xl border-2 border-green-600 p-6">

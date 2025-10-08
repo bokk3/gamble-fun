@@ -50,6 +50,13 @@ const Navbar: React.FC = () => {
                 >
                   Dashboard
                 </Link>
+                <Link
+                  to="/profile"
+                  className="text-casino-accent hover:text-casino-gold transition-colors"
+                  onClick={() => audioService.playButtonClick()}
+                >
+                  Profile
+                </Link>
                 <button
                   onClick={() => {
                     audioService.playButtonClick();

@@ -15,6 +15,8 @@ import { gameRoutes } from './routes/game';
 import { betRoutes } from './routes/bet';
 import { leaderboardRoutes } from './routes/leaderboard';
 import { adminRoutes } from './routes/admin';
+import bonusRoutes from './routes/bonus';
+import creditsRoutes from './routes/credits';
 import { initializeSocket } from './socket/socketHandler';
 import { connectDatabase } from './config/database';
 import { connectRedis } from './config/redis';
@@ -58,6 +60,8 @@ app.use('/api/games', gameRoutes);
 app.use('/api/bet', betRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/bonus', bonusRoutes);
+app.use('/api/credits', creditsRoutes);
 
 // Error handling
 app.use(errorHandler);
