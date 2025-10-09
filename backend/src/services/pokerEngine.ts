@@ -294,7 +294,7 @@ export function evaluateHand(cards: Card[]): HandResult {
  * Find straight in cards
  */
 function findStraight(sortedCards: Card[]): Card[] {
-  const uniqueRanks = [...new Set(sortedCards.map(c => c.rank))].sort((a, b) => b - a);
+  const uniqueRanks = Array.from(new Set(sortedCards.map(c => c.rank))).sort((a, b) => b - a);
   
   // Check for regular straight
   for (let i = 0; i <= uniqueRanks.length - 5; i++) {

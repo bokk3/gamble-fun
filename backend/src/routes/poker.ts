@@ -26,6 +26,8 @@ import {
   HandResult
 } from '../services/pokerEngine';
 import { ProvablyFairEngine } from '../services/gameEngine';
+import AIPlayerManager from '../services/aiPlayerManager';
+import { getPokerManager } from '../socket/socketHandler';
 
 const router = express.Router();
 
@@ -105,17 +107,36 @@ router.get('/table/:tableId', authenticateToken, async (req: Request, res: Respo
     
     const table = tableResult[0];
     
-    // Get current players at table
+    // Get current players at table (including AI players)
     const players = await executeQuery(`
       SELECT 
         ps.*,
-        u.username,
-        u.avatar_url,
-        pps.hands_played,
-        pps.hands_won,
-        pps.total_winnings
+        CASE 
+          WHEN ps.user_id > 0 THEN u.username
+          ELSE pai.name
+        END as username,
+        CASE 
+          WHEN ps.user_id > 0 THEN NULL
+          ELSE pai.avatar_url
+        END as avatar_url,
+        CASE 
+          WHEN ps.user_id < 0 THEN pai.playing_style
+          ELSE NULL
+        END as playing_style,
+        CASE 
+          WHEN ps.user_id < 0 THEN pai.skill_level
+          ELSE NULL
+        END as skill_level,
+        COALESCE(pps.hands_played, 0) as hands_played,
+        COALESCE(pps.hands_won, 0) as hands_won,
+        COALESCE(pps.total_winnings, 0) as total_winnings,
+        CASE 
+          WHEN ps.user_id < 0 THEN true
+          ELSE false
+        END as is_ai
       FROM poker_seats ps
-      JOIN users u ON ps.user_id = u.id
+      LEFT JOIN users u ON ps.user_id = u.id AND ps.user_id > 0
+      LEFT JOIN poker_ai_players pai ON -ps.user_id = pai.id AND ps.user_id < 0
       LEFT JOIN poker_player_stats pps ON ps.user_id = pps.user_id
       WHERE ps.table_id = ? AND ps.is_active = true
       ORDER BY ps.seat_position ASC
@@ -147,6 +168,84 @@ router.get('/table/:tableId', authenticateToken, async (req: Request, res: Respo
   }
 });
 
+// Get current game state for a table
+router.get('/game-state/:tableId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const tableId = parseInt(req.params.tableId);
+    
+    // Get current active game
+    const gameResult = await executeQuery(`
+      SELECT 
+        pg.*,
+        pt.name as table_name,
+        pt.small_blind,
+        pt.big_blind
+      FROM poker_games pg
+      JOIN poker_tables pt ON pg.table_id = pt.id
+      WHERE pg.table_id = ? 
+      AND pg.game_state != 'completed'
+      ORDER BY pg.created_at DESC
+      LIMIT 1
+    `, [tableId]);
+
+    if (gameResult.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No active game at this table',
+        data: null
+      });
+    }
+
+    const game = gameResult[0];
+
+    // Get current hand if exists
+    const handResult = await executeQuery(`
+      SELECT * FROM poker_hands 
+      WHERE game_id = ? 
+      ORDER BY started_at DESC 
+      LIMIT 1
+    `, [game.id]);
+
+    const currentHand = handResult.length > 0 ? handResult[0] : null;
+
+    // Get all players in current game
+    const players = await executeQuery(`
+      SELECT 
+        ps.*,
+        CASE 
+          WHEN ps.user_id > 0 THEN u.username
+          ELSE pai.name
+        END as name,
+        CASE 
+          WHEN ps.user_id < 0 THEN true
+          ELSE false
+        END as is_ai
+      FROM poker_seats ps
+      LEFT JOIN users u ON ps.user_id = u.id AND ps.user_id > 0
+      LEFT JOIN poker_ai_players pai ON -ps.user_id = pai.id AND ps.user_id < 0
+      WHERE ps.table_id = ? AND ps.is_active = true
+      ORDER BY ps.seat_position
+    `, [tableId]);
+
+    res.json({
+      success: true,
+      message: 'Game state retrieved successfully',
+      data: {
+        game,
+        currentHand,
+        players,
+        activePlayerCount: players.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching game state:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch game state'
+    });
+  }
+});
+
 /**
  * Join a poker table
  */
@@ -161,7 +260,7 @@ router.post('/join', authenticateToken, async (req: Request, res: Response) => {
     }
     
     const { tableId, buyIn, seatPosition } = value;
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id;
     
     // Get table information
     const tableResult = await executeQuery(
@@ -196,6 +295,25 @@ router.post('/join', authenticateToken, async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: 'Insufficient balance'
+      });
+    }
+    
+    // Check if user already has an active seat at this table
+    const existingSeat = await executeQuery(
+      'SELECT id, seat_position, chips FROM poker_seats WHERE table_id = ? AND user_id = ? AND is_active = true',
+      [tableId, userId]
+    );
+    
+    if (existingSeat.length > 0) {
+      // User already seated - return existing seat info instead of creating new one
+      return res.json({
+        success: true,
+        message: 'Already seated at poker table',
+        data: {
+          tableId,
+          seatPosition: existingSeat[0].seat_position,
+          chips: parseFloat(existingSeat[0].chips)
+        }
       });
     }
     
@@ -278,7 +396,7 @@ router.post('/join', authenticateToken, async (req: Request, res: Response) => {
 router.post('/leave', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { tableId } = req.body;
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id;
     
     // Get player's seat
     const seatResult = await executeQuery(
@@ -336,6 +454,71 @@ router.post('/leave', authenticateToken, async (req: Request, res: Response) => 
     res.status(500).json({
       success: false,
       message: 'Failed to leave poker table'
+    });
+  }
+});
+
+/**
+ * Start a hand manually (for testing/admin purposes)
+ */
+router.post('/start-hand', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { tableId } = req.body;
+    
+    if (!tableId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Table ID is required'
+      });
+    }
+    
+    // Get table info
+    const tableResult = await executeQuery(
+      'SELECT * FROM poker_tables WHERE id = ? AND is_active = true',
+      [tableId]
+    );
+    
+    if (tableResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Table not found'
+      });
+    }
+    
+    // Get current player count (including AI)
+    const playerCount = await executeQuery(`
+      SELECT COUNT(*) as count
+      FROM poker_seats ps
+      WHERE ps.table_id = ? AND ps.is_active = true AND ps.chips > 0
+    `, [tableId]);
+    
+    if (playerCount[0].count < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Need at least 2 players to start a hand'
+      });
+    }
+    
+    // Use poker manager directly to start hand
+    const pokerManager = getPokerManager();
+    if (pokerManager) {
+      await pokerManager.startHand(tableId);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Hand start command sent',
+      data: {
+        tableId,
+        playerCount: playerCount[0].count
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error starting poker hand:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to start poker hand'
     });
   }
 });
@@ -442,7 +625,7 @@ router.post('/start-game', authenticateToken, async (req: Request, res: Response
       },
       {
         query: 'UPDATE poker_games SET pot_amount = ?, game_state = ? WHERE id = ?',
-        params: [table.small_blind + table.big_blind, 'dealing', gameId]
+        params: [parseFloat(table.small_blind) + parseFloat(table.big_blind), 'dealing', gameId]
       }
     ];
     
@@ -456,7 +639,7 @@ router.post('/start-game', authenticateToken, async (req: Request, res: Response
         dealerPosition,
         smallBlindPosition,
         bigBlindPosition,
-        potAmount: table.small_blind + table.big_blind
+        potAmount: parseFloat(table.small_blind) + parseFloat(table.big_blind)
       }
     });
     
@@ -483,7 +666,7 @@ router.post('/action', authenticateToken, async (req: Request, res: Response) =>
     }
     
     const { gameId, action, amount = 0 } = value;
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id;
     
     // Get game details
     const gameResult = await executeQuery(
@@ -588,7 +771,7 @@ router.post('/action', authenticateToken, async (req: Request, res: Response) =>
  */
 router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user.id;
     
     const statsResult = await executeQuery(`
       SELECT 

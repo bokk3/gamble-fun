@@ -1,7 +1,17 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import PokerGameManager from './pokerHandler';
+import AIPlayerManager from '../services/aiPlayerManager';
+
+let pokerManager: PokerGameManager;
 
 export const initializeSocket = (io: Server) => {
+  // Initialize poker game manager
+  pokerManager = new PokerGameManager(io);
+  
+  // Initialize AI Player Manager
+  AIPlayerManager.initialize(io);
+
   // Authentication middleware for socket connections
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
@@ -48,8 +58,29 @@ export const initializeSocket = (io: Server) => {
       });
     });
 
+    // Poker-specific socket events
+    socket.on('poker:join_table', (data) => {
+      console.log(`🎯 Received poker:join_table event from user ${socket.data.user.username}:`, data);
+      pokerManager.joinTable(socket, { ...data, userId: socket.data.user.id });
+    });
+
+    socket.on('poker:leave_table', (data) => {
+      pokerManager.leaveTable(socket, { ...data, userId: socket.data.user.id });
+    });
+
+    socket.on('poker:action', (data) => {
+      pokerManager.handlePlayerAction(socket, { ...data, userId: socket.data.user.id });
+    });
+
+    socket.on('poker:start_hand', (data) => {
+      if (data.tableId) {
+        pokerManager.startNewHand(data.tableId);
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log(`User ${socket.data.user.username} disconnected`);
+      pokerManager.handleDisconnect(socket);
     });
   });
 
@@ -58,3 +89,5 @@ export const initializeSocket = (io: Server) => {
     io.to(`user_${userId}`).emit('balance:update', { balance: newBalance });
   };
 };
+
+export const getPokerManager = () => pokerManager;

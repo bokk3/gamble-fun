@@ -22,19 +22,35 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Connect to WebSocket server
+    // Get authentication token
+    const token = localStorage.getItem('casino_token');
+    
+    if (!token) {
+      console.warn('No authentication token found - WebSocket will not connect');
+      return;
+    }
+
+    // Connect to WebSocket server with authentication
     const newSocket = io('ws://localhost:5000', {
       transports: ['websocket'],
+      auth: {
+        token: token
+      }
     });
 
     newSocket.on('connect', () => {
       setIsConnected(true);
-      console.log('Connected to WebSocket server');
+      console.log('✅ Connected to WebSocket server');
     });
 
     newSocket.on('disconnect', () => {
       setIsConnected(false);
-      console.log('Disconnected from WebSocket server');
+      console.log('❌ Disconnected from WebSocket server');
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ WebSocket connection error:', error.message);
+      setIsConnected(false);
     });
 
     setSocket(newSocket);

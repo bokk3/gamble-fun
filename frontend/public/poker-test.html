@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Poker Hand Start Test</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        button { padding: 15px 30px; font-size: 18px; margin: 10px; }
+        .debug { background: #f0f0f0; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🎯 Poker Hand Start Test</h1>
+    
+    <div class="debug">
+        <h3>Status:</h3>
+        <div id="status">Not logged in</div>
+    </div>
+    
+    <button onclick="login()">1. Login as Demo</button>
+    <button onclick="startHand()">2. Start Hand at Table 2</button>
+    <button onclick="checkTable()">3. Check Table 2 Status</button>
+    <button onclick="checkGameState()">4. Check Game State</button>
+    
+    <div class="debug">
+        <h3>Debug Log:</h3>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let token = '';
+        
+        function log(message, isError = false) {
+            const logDiv = document.getElementById('log');
+            const color = isError ? 'red' : 'black';
+            logDiv.innerHTML += `<div style="color: ${color};">${new Date().toLocaleTimeString()}: ${message}</div>`;
+            console.log(message);
+        }
+        
+        async function login() {
+            try {
+                log('Attempting login...');
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'demo', password: 'demo123' })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    token = data.data.token;
+                    document.getElementById('status').innerHTML = `<span class="success">✅ Logged in as ${data.data.user.username} (Balance: $${data.data.user.balance})</span>`;
+                    log(`✅ Login successful! Token: ${token.substring(0, 20)}...`);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (error) {
+                log(`❌ Login failed: ${error.message}`, true);
+            }
+        }
+        
+        async function startHand() {
+            if (!token) {
+                log('❌ Please login first!', true);
+                return;
+            }
+            
+            try {
+                log('Starting hand at table 2...');
+                const response = await fetch('http://localhost:5000/api/poker/start-hand', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ tableId: 2 })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    log(`✅ Hand started! ${data.data.playerCount} players at table ${data.data.tableId}`);
+                    alert(`🎉 Success! Hand started with ${data.data.playerCount} players!`);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (error) {
+                log(`❌ Start hand failed: ${error.message}`, true);
+                alert(`❌ Failed: ${error.message}`);
+            }
+        }
+        
+        async function checkTable() {
+            if (!token) {
+                log('❌ Please login first!', true);
+                return;
+            }
+            
+            try {
+                log('Checking table 2 status...');
+                const response = await fetch('http://localhost:5000/api/poker/table/2', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    log(`✅ Table 2: ${JSON.stringify(data.data, null, 2)}`);
+                    alert(`Table info: ${data.data.players?.length || 0} players`);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (error) {
+                log(`❌ Check failed: ${error.message}`, true);
+                alert(`❌ Failed: ${error.message}`);
+            }
+        }
+
+        async function checkGameState() {
+            if (!token) {
+                log('❌ Please login first!', true);
+                return;
+            }
+            
+            try {
+                log('Checking current game state...');
+                const response = await fetch('http://localhost:5000/api/poker/game-state/2', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    log(`✅ Game State: ${JSON.stringify(data.data, null, 2)}`);
+                    alert(`Game state: ${data.data?.game_state || 'No active game'}`);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (error) {
+                log(`❌ Game state check failed: ${error.message}`, true);
+                alert(`❌ Failed: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

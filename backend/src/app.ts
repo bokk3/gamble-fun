@@ -54,6 +54,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Middleware to make io available to routes
+app.use((req, res, next) => {
+  (req as any).io = io;
+  next();
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
@@ -80,6 +86,7 @@ async function startServer() {
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+      // Poker system ready
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

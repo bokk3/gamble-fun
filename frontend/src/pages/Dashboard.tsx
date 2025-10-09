@@ -31,6 +31,7 @@ const Dashboard: React.FC = () => {
       case 'roulette': return '🎡';
       case 'dice': return '🎲';
       case 'crash': return '📈';
+      case 'poker': return '🃏';
       default: return '🎮';
     }
   };
@@ -42,6 +43,7 @@ const Dashboard: React.FC = () => {
       case 'roulette': return 'Where will the ball land?';
       case 'dice': return 'Predict the roll outcome';
       case 'crash': return 'Cash out before the crash!';
+      case 'poker': return 'Texas Hold\'em multiplayer tables';
       default: return 'Classic casino game';
     }
   };

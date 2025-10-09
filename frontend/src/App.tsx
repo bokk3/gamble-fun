@@ -16,6 +16,7 @@ import DiceGame from './pages/games/DiceGame';
 import CrashGame from './pages/games/CrashGame';
 import BlackjackGame from './pages/games/BlackjackGame';
 import RouletteGame from './pages/games/RouletteGame';
+import PokerGame from './pages/games/PokerGame';
 import Leaderboard from './pages/Leaderboard';
 
 const queryClient = new QueryClient();
@@ -71,6 +72,11 @@ function App() {
                   <Route path="/games/roulette" element={
                     <ProtectedRoute>
                       <RouletteGame />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/games/poker" element={
+                    <ProtectedRoute>
+                      <PokerGame />
                     </ProtectedRoute>
                   } />
                   <Route path="/leaderboard" element={<Leaderboard />} />
