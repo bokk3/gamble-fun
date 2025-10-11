@@ -717,7 +717,7 @@ router.post('/action', authenticateToken, async (req: Request, res: Response) =>
       userId: seat.user_id,
       seatPosition: seat.seat_position,
       chips: parseFloat(seat.chips),
-      holeCards: seat.hole_cards ? JSON.parse(seat.hole_cards) : [],
+      holeCards: seat.hole_cards ? (typeof seat.hole_cards === 'string' ? JSON.parse(seat.hole_cards) : seat.hole_cards) : [],
       currentBet: parseFloat(seat.current_bet),
       totalBetThisHand: parseFloat(seat.total_bet_this_hand),
       lastAction: seat.last_action,
@@ -851,6 +851,62 @@ router.get('/leaderboard', authenticateToken, async (req: Request, res: Response
     res.status(500).json({
       success: false,
       message: 'Failed to fetch poker leaderboard'
+    });
+  }
+});
+
+/**
+ * Emergency system reset endpoint - for development/debugging
+ */
+router.post('/emergency-reset', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    // Only allow in development
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({
+        success: false,
+        message: 'Emergency reset not allowed in production'
+      });
+    }
+
+    const { DatabaseCleanupService } = await import('../services/databaseCleanup');
+    await DatabaseCleanupService.emergencyReset();
+
+    res.json({
+      success: true,
+      message: 'Emergency reset completed successfully'
+    });
+
+  } catch (error) {
+    console.error('Emergency reset error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Emergency reset failed'
+    });
+  }
+});
+
+/**
+ * System health check endpoint
+ */
+router.get('/health', async (req: Request, res: Response) => {
+  try {
+    const { DatabaseCleanupService } = await import('../services/databaseCleanup');
+    const healthStats = await DatabaseCleanupService.getHealthStats();
+
+    res.json({
+      success: true,
+      data: {
+        timestamp: new Date().toISOString(),
+        stats: healthStats,
+        status: healthStats?.orphaned_seats > 10 ? 'warning' : 'healthy'
+      }
+    });
+
+  } catch (error) {
+    console.error('Health check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Health check failed'
     });
   }
 });

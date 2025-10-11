@@ -17,7 +17,9 @@ import CrashGame from './pages/games/CrashGame';
 import BlackjackGame from './pages/games/BlackjackGame';
 import RouletteGame from './pages/games/RouletteGame';
 import PokerGame from './pages/games/PokerGame';
+import PokerTable from './pages/games/PokerTable';
 import Leaderboard from './pages/Leaderboard';
+import ConnectionStatus from './components/ConnectionStatus';
 
 const queryClient = new QueryClient();
 
@@ -34,6 +36,7 @@ function App() {
           <Router>
             <div className="min-h-screen bg-gradient-to-br from-casino-primary to-casino-secondary">
               <Navbar />
+              <ConnectionStatus />
               <main className="container mx-auto px-4 py-8">
                 <Routes>
                   <Route path="/" element={<Home />} />
@@ -77,6 +80,11 @@ function App() {
                   <Route path="/games/poker" element={
                     <ProtectedRoute>
                       <PokerGame />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/games/poker/table/:tableId" element={
+                    <ProtectedRoute>
+                      <PokerTable />
                     </ProtectedRoute>
                   } />
                   <Route path="/leaderboard" element={<Leaderboard />} />

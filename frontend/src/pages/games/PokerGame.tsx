@@ -328,19 +328,30 @@ const PokerGame: React.FC = () => {
     console.log('✅ WebSocket: Table state received:', tableState);
     setCurrentTable(tableState);
     
-    // Check if it's player's turn
+    // Check if it's player's turn with improved detection
     const currentPlayer = tableState.players.find(p => p.userId === user?.id);
+    console.log('🎯 Turn check:', {
+      currentPlayerPos: tableState.currentPlayerPosition,
+      myPosition: currentPlayer?.seatPosition,
+      myId: user?.id,
+      folded: currentPlayer?.isFolded,
+      allIn: currentPlayer?.isAllIn
+    });
+    
     const isMyTurn = currentPlayer && 
       tableState.currentPlayerPosition === currentPlayer.seatPosition &&
       !currentPlayer.isFolded && 
-      !currentPlayer.isAllIn;
+      !currentPlayer.isAllIn &&
+      currentPlayer.isActive;
     
     setIsPlayerTurn(!!isMyTurn);
+    console.log(`🎯 My turn status: ${!!isMyTurn}`);
     
     // Set player's cards if available
-    if (currentPlayer?.holeCards) {
+    if (currentPlayer?.holeCards && currentPlayer.holeCards.length > 0) {
       setPlayerCards(currentPlayer.holeCards);
       setShowCards(true);
+      console.log('🃏 My cards:', currentPlayer.holeCards);
     }
   };
 

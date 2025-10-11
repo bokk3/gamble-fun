@@ -110,7 +110,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [isAuthenticated]);
 
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
-    console.log('🔐 Login attempt started:', { username: credentials.username, apiUrl: API_BASE_URL });
+    console.log('🔐 Login attempt started:', { 
+      username: credentials.username, 
+      apiUrl: API_BASE_URL, 
+      fullUrl: `${API_BASE_URL}/auth/login` 
+    });
+    
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/login`, credentials);
       console.log('✅ Login API response:', response.data);
@@ -128,12 +133,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
         
-        toast.success('Login successful!');
+        toast.success('Login successful! Welcome back!');
         return true;
+      } else {
+        console.warn('⚠️ Login API returned success=false:', response.data);
+        toast.error(response.data.message || 'Login failed');
       }
     } catch (error: any) {
-      console.error('❌ Login error:', error);
-      const message = error.response?.data?.message || 'Login failed';
+      console.error('❌ Login error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      
+      const message = error.response?.data?.message || 
+                     error.response?.statusText || 
+                     error.message || 
+                     'Login failed - please check your connection';
       toast.error(message);
     }
     return false;

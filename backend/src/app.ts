@@ -19,6 +19,7 @@ import bonusRoutes from './routes/bonus';
 import creditsRoutes from './routes/credits';
 import pokerRoutes from './routes/poker';
 import { initializeSocket } from './socket/socketHandler';
+import { DatabaseCleanupService } from './services/databaseCleanup';
 import { connectDatabase } from './config/database';
 import { connectRedis } from './config/redis';
 
@@ -83,9 +84,13 @@ async function startServer() {
     // Initialize WebSocket handlers
     initializeSocket(io);
     
+    // Initialize database cleanup service
+    DatabaseCleanupService.initialize();
+    
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+      console.log('🧹 Database cleanup service active');
       // Poker system ready
     });
   } catch (error) {

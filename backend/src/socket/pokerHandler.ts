@@ -58,125 +58,63 @@ class PokerGameManager {
   }
 
   /**
-   * Join a poker table
+   * Handle poker player joining a table with reconnection support
    */
-  async joinTable(socket: Socket, data: { tableId: number; userId: number }) {
+  static async handleJoinTable(socket: Socket, data: any) {
     try {
-      const { tableId, userId } = data;
+      const { tableId, buyIn } = data;
+      const userId = (socket as any).user?.id;
+      
+      if (!userId) {
+        socket.emit('poker_error', { message: 'Authentication required' });
+        return;
+      }
 
-      console.log(`🎯 WEBSOCKET: User ${userId} attempting to join poker table ${tableId}`);
+      console.log(`User ${userId} attempting to join poker table ${tableId} with buyIn ${buyIn}`);
 
-      // Get table info
-      const tableResult = await executeQuery(
-        'SELECT * FROM poker_tables WHERE id = ? AND is_active = true',
+      // Check if table exists
+      const table = await executeQuery(
+        'SELECT * FROM poker_tables WHERE id = ?',
         [tableId]
       );
 
-      if (tableResult.length === 0) {
-        socket.emit('poker:error', { message: 'Table not found' });
+      if (table.length === 0) {
+        socket.emit('poker_error', { message: 'Table not found' });
         return;
       }
 
-      const table = tableResult[0];
-
-      // Get user info
-      const userResult = await executeQuery(
-        'SELECT username FROM users WHERE id = ?',
-        [userId]
+      // Check if player already has a seat (reconnection case)
+      const existingSeat = await executeQuery(
+        'SELECT * FROM poker_seats WHERE user_id = ? AND table_id = ? AND (is_active = 1 OR (is_active = 0 AND left_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)))',
+        [userId, tableId]
       );
 
-      if (userResult.length === 0) {
-        socket.emit('poker:error', { message: 'User not found' });
-        return;
-      }
+      if (existingSeat.length > 0) {
+        console.log(`🔄 User ${userId} reconnecting to existing seat at table ${tableId}`);
+        
+        // Reactivate the seat
+        await executeQuery(
+          'UPDATE poker_seats SET is_active = 1, is_sitting_out = 0, last_seen = NOW(), left_at = NULL WHERE user_id = ? AND table_id = ?',
+          [userId, tableId]
+        );
 
-      const user = userResult[0];
+        // Join socket room
+        socket.join(`poker_table_${tableId}`);
+        (socket as any).pokerTableId = tableId;
 
-      // Check if player is already at table
-      const seatResult = await executeQuery(
-        'SELECT * FROM poker_seats WHERE table_id = ? AND user_id = ? AND is_active = true',
-        [tableId, userId]
-      );
-
-      if (seatResult.length === 0) {
-        socket.emit('poker:error', { message: 'Player not seated at table' });
-        return;
-      }
-
-      const seat = seatResult[0];
-
-      // Initialize table if not exists
-      if (!this.tables.has(tableId)) {
-        this.tables.set(tableId, {
-          id: tableId,
-          players: new Map(),
-          spectators: new Set(),
-          gameState: null,
-          deck: [],
-          communityCards: [],
-          pot: 0,
-          currentBet: 0,
-          minRaise: table.big_blind,
-          dealerPosition: 0,
-          smallBlindPosition: 1,
-          bigBlindPosition: 2,
-          currentPlayerPosition: 0,
-          bettingRound: 'pre_flop',
-          handNumber: 1
+        // Send current game state
+        await this.sendTableState(tableId);
+        
+        socket.emit('poker_rejoined', {
+          message: 'Welcome back! You have been reconnected to your seat.',
+          seat: existingSeat[0]
         });
+        
+        return;
       }
-
-      const pokerTable = this.tables.get(tableId)!;
-
-      // Add player to table
-      const player: PokerPlayer = {
-        userId,
-        seatPosition: seat.seat_position,
-        chips: parseFloat(seat.chips),
-        holeCards: this.safeParseJSON(seat.hole_cards, []),
-        currentBet: parseFloat(seat.current_bet || 0),
-        totalBetThisHand: parseFloat(seat.total_bet_this_hand || 0),
-        lastAction: seat.last_action,
-        isActive: seat.is_active,
-        isAllIn: seat.is_all_in,
-        isFolded: seat.last_action === 'fold',
-        socketId: socket.id,
-        username: user.username,
-        avatar: undefined
-      };
-
-      pokerTable.players.set(userId, player);
-
-      // Join socket room
-      socket.join(`poker_table_${tableId}`);
-
-      // Send table state to player
-      await this.sendTableState(tableId);
-
-      // Notify other players
-      socket.to(`poker_table_${tableId}`).emit('poker:player_joined', {
-        player: {
-          userId: player.userId,
-          username: player.username,
-          avatar: player.avatar,
-          seatPosition: player.seatPosition,
-          chips: player.chips,
-          isActive: player.isActive
-        }
-      });
-
-      socket.emit('poker:joined_table', {
-        tableId,
-        seatPosition: player.seatPosition,
-        chips: player.chips
-      });
-
-      // Check if we can start a hand
-      await this.checkAndStartHand(tableId);
-
     } catch (error) {
-      console.error('Error joining poker table:', error);
-      socket.emit('poker:error', { message: 'Failed to join table' });
+      console.error('Error in handleJoinTable:', error);
+      socket.emit('poker_error', { message: 'Failed to join table' });
     }
   }
 
@@ -323,11 +261,15 @@ class PokerGameManager {
       pokerTable.bigBlindPosition = (pokerTable.dealerPosition + 2) % activePlayers.length;
       pokerTable.currentPlayerPosition = (pokerTable.bigBlindPosition + 1) % activePlayers.length;
 
-      // Deal hole cards
+      // Reset hole cards for all players
+      for (const player of activePlayers) {
+        player.holeCards = [];
+      }
+
+      // Deal hole cards (2 cards per player)
       let cardIndex = 0;
       for (let round = 0; round < 2; round++) {
         for (const player of activePlayers) {
-          if (!player.holeCards) player.holeCards = [];
           player.holeCards.push(shuffledDeck[cardIndex++]);
         }
       }
@@ -420,20 +362,28 @@ class PokerGameManager {
         await executeTransaction(blindActions);
       }
 
-      // Save hole cards to database
-      const holeCardUpdates = [];
+      // Reset all players for new hand and save hole cards
+      const handResetUpdates = [];
       for (const player of activePlayers) {
-        if (player.holeCards && player.holeCards.length === 2) {
-          holeCardUpdates.push({
-            query: 'UPDATE poker_seats SET hole_cards = ? WHERE table_id = ? AND user_id = ?',
-            params: [JSON.stringify(player.holeCards), tableId, player.userId]
-          });
-        }
+        const updates = {
+          query: `UPDATE poker_seats SET 
+            hole_cards = ?, 
+            last_action = NULL, 
+            current_bet = 0, 
+            total_bet_this_hand = 0 
+            WHERE table_id = ? AND user_id = ?`,
+          params: [
+            player.holeCards ? JSON.stringify(player.holeCards) : null, 
+            tableId, 
+            player.userId
+          ]
+        };
+        handResetUpdates.push(updates);
       }
       
-      if (holeCardUpdates.length > 0) {
-        await executeTransaction(holeCardUpdates);
-        console.log(`🃏 Dealt hole cards to ${holeCardUpdates.length} players`);
+      if (handResetUpdates.length > 0) {
+        await executeTransaction(handResetUpdates);
+        console.log(`🃏 Dealt hole cards and reset ${handResetUpdates.length} players for new hand`);
       }
 
       // Update game state from 'dealing' to 'pre_flop'
@@ -753,6 +703,27 @@ class PokerGameManager {
   }
 
   /**
+   * Handle heartbeat to keep player connection alive
+   */
+  static async handleHeartbeat(socket: Socket, data: any) {
+    try {
+      const userId = (socket as any).user?.id;
+      if (userId) {
+        // Update last_seen timestamp for this player
+        await executeQuery(
+          'UPDATE poker_seats SET last_seen = NOW() WHERE user_id = ? AND is_active = 1',
+          [userId]
+        );
+        
+        // Send heartbeat response
+        socket.emit('heartbeat_response', { timestamp: Date.now() });
+      }
+    } catch (error) {
+      console.error('Error handling heartbeat:', error);
+    }
+  }
+
+  /**
    * Send complete table state to all players
    */
   private async sendTableState(tableId: number) {
@@ -922,12 +893,12 @@ class PokerGameManager {
       setTimeout(async () => {
         try {
           await executeQuery(
-            'UPDATE poker_seats SET is_active = 0, left_at = NOW() WHERE user_id = ? AND is_active = 1 AND joined_at < DATE_SUB(NOW(), INTERVAL 30 SECOND)',
+            'UPDATE poker_seats SET is_active = 0, left_at = NOW() WHERE user_id = ? AND is_active = 1',
             [userId]
           );
-          console.log(`Cleaned up poker seats for disconnected user ${userId}`);
+          console.log(`✅ Cleaned up poker seats for disconnected user ${userId}`);
         } catch (error) {
-          console.error('Error cleaning up poker seats on disconnect:', error);
+          console.error('❌ Error cleaning up poker seats on disconnect:', error);
         }
       }, 30000); // 30 second grace period for reconnection
 

@@ -58,25 +58,14 @@ export const initializeSocket = (io: Server) => {
       });
     });
 
-    // Poker-specific socket events
-    socket.on('poker:join_table', (data) => {
-      console.log(`🎯 Received poker:join_table event from user ${socket.data.user.username}:`, data);
-      pokerManager.joinTable(socket, { ...data, userId: socket.data.user.id });
-    });
-
-    socket.on('poker:leave_table', (data) => {
-      pokerManager.leaveTable(socket, { ...data, userId: socket.data.user.id });
-    });
-
-    socket.on('poker:action', (data) => {
-      pokerManager.handlePlayerAction(socket, { ...data, userId: socket.data.user.id });
-    });
-
-    socket.on('poker:start_hand', (data) => {
-      if (data.tableId) {
-        pokerManager.startNewHand(data.tableId);
-      }
-    });
+        // Poker-specific events
+    socket.on('poker:join_table', (data) => PokerGameManager.handleJoinTable(socket, data));
+    socket.on('poker:leave_table', (data) => pokerManager.leaveTable(socket, data));
+    socket.on('poker:action', (data) => pokerManager.handlePlayerAction(socket, data));
+    socket.on('poker:start_hand', (data) => pokerManager.startNewHand(data.tableId));
+    
+    // Heartbeat to keep connection alive and update player activity
+    socket.on('heartbeat', (data) => PokerGameManager.handleHeartbeat(socket, data));
 
     socket.on('disconnect', () => {
       console.log(`User ${socket.data.user.username} disconnected`);

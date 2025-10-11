@@ -239,28 +239,28 @@ export class AIPokerEngine {
   private static calculateBestAction(ai: AIPlayer, factors: any): AIDecision {
     const { handStrength, handRank, potOdds, positionStrength, context, player, amountToCall } = factors;
     
-    // Base thresholds adjusted by AI personality
-    let foldThreshold = 0.2;
-    let callThreshold = 0.4;
-    let betThreshold = 0.6;
-    let raiseThreshold = 0.7;
-    let bluffThreshold = 0.3;
+    // Base thresholds adjusted by AI personality (made more aggressive)
+    let foldThreshold = 0.1;
+    let callThreshold = 0.25;
+    let betThreshold = 0.5;
+    let raiseThreshold = 0.65;
+    let bluffThreshold = 0.15;
 
-    // Adjust thresholds based on playing style
+    // Adjust thresholds based on playing style (more realistic)
     switch (ai.playing_style) {
       case 'tight_passive':
-        foldThreshold = 0.3;
-        callThreshold = 0.6;
-        betThreshold = 0.8;
-        raiseThreshold = 0.9;
-        bluffThreshold = 0.1;
+        foldThreshold = 0.15;
+        callThreshold = 0.35;
+        betThreshold = 0.6;
+        raiseThreshold = 0.75;
+        bluffThreshold = 0.05;
         break;
       case 'tight_aggressive':
-        foldThreshold = 0.25;
-        callThreshold = 0.5;
-        betThreshold = 0.65;
-        raiseThreshold = 0.75;
-        bluffThreshold = 0.2;
+        foldThreshold = 0.12;
+        callThreshold = 0.3;
+        betThreshold = 0.5;
+        raiseThreshold = 0.65;
+        bluffThreshold = 0.1;
         break;
       case 'loose_passive':
         foldThreshold = 0.1;
@@ -322,11 +322,14 @@ export class AIPokerEngine {
         };
       }
     } else {
+      // Debug logging for decision making
+      console.log(`${ai.name} decision factors: handStrength=${handStrength.toFixed(2)}, foldThreshold=${foldThreshold.toFixed(2)}, callThreshold=${callThreshold.toFixed(2)}, shouldBluff=${shouldBluff}, amountToCall=${amountToCall}`);
+      
       // There's a bet to call
       if (handStrength < foldThreshold && !shouldBluff) {
         return {
           action: 'fold',
-          reasoning: 'Hand too weak to continue',
+          reasoning: `Hand too weak to continue (${handStrength.toFixed(2)} < ${foldThreshold.toFixed(2)})`,
           confidence: 0.8
         };
       } else if (handStrength < callThreshold && potOdds < 3) {
