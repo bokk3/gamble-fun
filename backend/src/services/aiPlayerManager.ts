@@ -224,7 +224,17 @@ export class AIPlayerManager {
         return; // Don't continue processing this game
       }
 
-      // Emit AI action to room for real-time updates
+      // Emit standard poker events that frontend expects
+      this.io.to(`poker_table_${game.table_id}`).emit('poker:player_action', {
+        playerId: aiPlayer.user_id,
+        playerName: aiDetails.name,
+        action: decision.action,
+        amount: decision.amount,
+        currentPlayerPosition: nextPlayerPosition,
+        tableId: game.table_id
+      });
+
+      // Also emit AI-specific event for debugging/analytics
       this.io.to(`poker_table_${game.table_id}`).emit('ai_action', {
         aiName: aiDetails.name,
         action: decision.action,
@@ -233,6 +243,9 @@ export class AIPlayerManager {
         confidence: decision.confidence,
         nextPlayer: nextPlayerPosition
       });
+
+      // Trigger table state update for frontend
+      await this.sendTableStateUpdate(game.table_id);
 
       console.log(`AI ${aiDetails.name} performed ${decision.action} at table ${game.table_id}`);
 
@@ -781,6 +794,69 @@ export class AIPlayerManager {
     
     // Already parsed object
     return data;
+  }
+
+  /**
+   * Send table state update to frontend via WebSocket
+   */
+  private static async sendTableStateUpdate(tableId: number) {
+    try {
+      // Get current game state
+      const gameResult = await executeQuery(
+        'SELECT * FROM poker_games WHERE table_id = ? AND game_state != "finished" ORDER BY created_at DESC LIMIT 1',
+        [tableId]
+      );
+
+      if (gameResult.length === 0) return;
+
+      const game = gameResult[0];
+
+      // Get all players at the table
+      const players = await executeQuery(`
+        SELECT ps.*, 
+        CASE 
+          WHEN ps.user_id < 0 THEN pai.name
+          ELSE u.username
+        END as username
+        FROM poker_seats ps
+        LEFT JOIN users u ON ps.user_id = u.id AND ps.user_id > 0
+        LEFT JOIN poker_ai_players pai ON -ps.user_id = pai.id AND ps.user_id < 0
+        WHERE ps.table_id = ? AND ps.is_active = true
+        ORDER BY ps.seat_position
+      `, [tableId]);
+
+      // Build table state
+      const tableState = {
+        tableId: tableId,
+        players: players.map((p: any) => ({
+          userId: p.user_id,
+          username: p.username,
+          seatPosition: p.seat_position,
+          chips: parseFloat(p.chips),
+          currentBet: parseFloat(p.current_bet || 0),
+          lastAction: p.last_action,
+          isActive: !!p.is_active,
+          isAllIn: !!p.is_all_in,
+          isFolded: p.last_action === 'fold',
+          isAI: p.user_id < 0
+        })),
+        communityCards: game.community_cards ? JSON.parse(game.community_cards) : [],
+        pot: parseFloat(game.pot_amount || 0),
+        currentBet: parseFloat(game.current_bet || 0),
+        currentPlayerPosition: game.current_player_position,
+        dealerPosition: game.dealer_position,
+        bettingRound: game.betting_round,
+        handNumber: game.hand_number,
+        gameState: game.game_state
+      };
+
+      // Emit table state to all players in the room
+      this.io.to(`poker_table_${tableId}`).emit('poker:table_state', tableState);
+      console.log(`📡 Sent table state update for table ${tableId}`);
+
+    } catch (error) {
+      console.error('Error sending table state update:', error);
+    }
   }
 
   /**

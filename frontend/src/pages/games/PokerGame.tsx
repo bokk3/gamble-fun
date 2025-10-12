@@ -111,6 +111,7 @@ const PokerGame: React.FC = () => {
     socket.on('poker:showdown', handleShowdown);
     socket.on('poker:hand_complete', handleHandComplete);
     socket.on('poker:error', handlePokerError);
+    socket.on('ai_action', handleAIAction);
   };
 
   const cleanupSocketListeners = () => {
@@ -126,6 +127,7 @@ const PokerGame: React.FC = () => {
     socket.off('poker:showdown');
     socket.off('poker:hand_complete');
     socket.off('poker:error');
+    socket.off('ai_action');
   };
 
   const fetchTables = async () => {
@@ -159,16 +161,16 @@ const PokerGame: React.FC = () => {
         const tableState: TableState = {
           tableId: table.id,
           players: players.map((p: any) => ({
-            userId: p.user_id,
+            userId: p.userId,
             username: p.username,
-            seatPosition: p.seat_position,
+            seatPosition: p.seatPosition,
             chips: parseFloat(p.chips),
-            currentBet: parseFloat(p.current_bet || 0),
-            lastAction: p.last_action,
-            isActive: !!p.is_active,
-            isAllIn: !!p.is_all_in,
-            isFolded: p.last_action === 'fold',
-            isAI: !!p.is_ai,
+            currentBet: parseFloat(p.currentBet || 0),
+            lastAction: p.lastAction,
+            isActive: !!p.isActive,
+            isAllIn: !!p.isAllIn,
+            isFolded: !!p.isFolded,
+            isAI: !!p.isAI,
             playingStyle: p.playing_style,
             skillLevel: p.skill_level
           })),
@@ -184,6 +186,26 @@ const PokerGame: React.FC = () => {
         
         console.log('✅ Table state fetched via API:', tableState);
         setCurrentTable(tableState);
+        
+        // Check if it's player's turn (same logic as WebSocket handler)
+        const currentPlayer = tableState.players.find(p => p.userId === user?.id);
+        console.log('🎯 API Turn check:', {
+          currentPlayerPos: tableState.currentPlayerPosition,
+          myPosition: currentPlayer?.seatPosition,
+          myId: user?.id,
+          folded: currentPlayer?.isFolded,
+          allIn: currentPlayer?.isAllIn,
+          active: currentPlayer?.isActive
+        });
+        
+        const isMyTurn = currentPlayer && 
+          tableState.currentPlayerPosition === currentPlayer.seatPosition &&
+          !currentPlayer.isFolded && 
+          !currentPlayer.isAllIn &&
+          currentPlayer.isActive;
+        
+        setIsPlayerTurn(!!isMyTurn);
+        console.log(`🎯 API My turn status: ${!!isMyTurn}`);
       }
     } catch (error) {
       console.error('Error fetching table state:', error);
@@ -388,6 +410,16 @@ const PokerGame: React.FC = () => {
   const handlePokerError = (data: any) => {
     console.error('Poker error:', data.message);
     alert(data.message);
+  };
+
+  const handleAIAction = (data: any) => {
+    console.log('🤖 AI Action:', data);
+    // Refresh table state after AI action
+    if (joinedTableId) {
+      setTimeout(() => {
+        fetchTableState(joinedTableId);
+      }, 500);
+    }
   };
 
   const getCardDisplay = (card: Card) => {

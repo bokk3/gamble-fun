@@ -110,7 +110,17 @@ router.get('/table/:tableId', authenticateToken, async (req: Request, res: Respo
     // Get current players at table (including AI players)
     const players = await executeQuery(`
       SELECT 
-        ps.*,
+        ps.user_id as userId,
+        ps.seat_position as seatPosition,
+        ps.chips,
+        ps.is_active as isActive,
+        ps.is_sitting_out as isSittingOut,
+        ps.last_action as lastAction,
+        ps.current_bet as currentBet,
+        ps.total_bet_this_hand as totalBetThisHand,
+        ps.hole_cards as holeCards,
+        ps.is_all_in as isAllIn,
+        ps.joined_at as joinedAt,
         CASE 
           WHEN ps.user_id > 0 THEN u.username
           ELSE pai.name
@@ -133,7 +143,11 @@ router.get('/table/:tableId', authenticateToken, async (req: Request, res: Respo
         CASE 
           WHEN ps.user_id < 0 THEN true
           ELSE false
-        END as is_ai
+        END as isAI,
+        CASE 
+          WHEN ps.last_action = 'fold' THEN true
+          ELSE false
+        END as isFolded
       FROM poker_seats ps
       LEFT JOIN users u ON ps.user_id = u.id AND ps.user_id > 0
       LEFT JOIN poker_ai_players pai ON -ps.user_id = pai.id AND ps.user_id < 0
@@ -907,6 +921,34 @@ router.get('/health', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Health check failed'
+    });
+  }
+});
+
+/**
+ * Debug endpoint to trigger WebSocket table state update
+ */
+router.post('/debug/broadcast-table/:tableId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const tableId = parseInt(req.params.tableId);
+    const pokerManager = getPokerManager();
+    
+    if (pokerManager) {
+      // Force send table state update via WebSocket
+      await (pokerManager as any).sendTableState(tableId);
+      console.log(`🔧 DEBUG: Forced WebSocket table state update for table ${tableId}`);
+    }
+
+    res.json({
+      success: true,
+      message: `WebSocket table state broadcast sent for table ${tableId}`
+    });
+
+  } catch (error) {
+    console.error('Debug broadcast error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Debug broadcast failed'
     });
   }
 });

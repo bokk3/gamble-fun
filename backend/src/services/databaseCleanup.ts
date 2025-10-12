@@ -111,9 +111,9 @@ export class DatabaseCleanupService {
     `);
 
     // Only remove players after 10 minutes of complete inactivity
+    // Delete instead of update to avoid unique constraint conflicts
     const result = await executeQuery(`
-      UPDATE poker_seats 
-      SET is_active = 0, left_at = NOW() 
+      DELETE FROM poker_seats 
       WHERE user_id > 0 
       AND is_active = 1 
       AND (last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 10 MINUTE))

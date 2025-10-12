@@ -421,10 +421,58 @@ class PokerGameManager {
     try {
       const { tableId, userId, action, amount = 0 } = data;
       
-      const pokerTable = this.tables.get(tableId);
+      let pokerTable = this.tables.get(tableId);
       if (!pokerTable) {
-        socket.emit('poker:error', { message: 'Table not found' });
-        return;
+        console.log(`No poker table found in memory for table ${tableId}, initializing for action`);
+        // Initialize table if not exists (same as startNewHand)
+        const newTable: PokerTable = {
+          id: tableId,
+          players: new Map(),
+          spectators: new Set(),
+          gameState: null,
+          deck: [],
+          communityCards: [],
+          pot: 0,
+          currentBet: 0,
+          minRaise: 0,
+          dealerPosition: 0,
+          smallBlindPosition: 1,
+          bigBlindPosition: 2,
+          currentPlayerPosition: 0,
+          bettingRound: 'pre_flop',
+          handNumber: 1
+        };
+        this.tables.set(tableId, newTable);
+        pokerTable = newTable;
+        
+        // Load current players from database
+        const dbPlayers = await executeQuery(`
+          SELECT ps.*, u.username, pai.name as ai_name
+          FROM poker_seats ps
+          LEFT JOIN users u ON ps.user_id = u.id AND ps.user_id > 0
+          LEFT JOIN poker_ai_players pai ON -ps.user_id = pai.id AND ps.user_id < 0
+          WHERE ps.table_id = ? AND ps.is_active = true
+        `, [tableId]);
+        
+        // Add players to memory table
+        for (const dbPlayer of dbPlayers) {
+          const player: PokerPlayer = {
+            id: dbPlayer.user_id,
+            socketId: dbPlayer.user_id > 0 ? socket.id : null,
+            username: dbPlayer.username || dbPlayer.ai_name,
+            chips: parseFloat(dbPlayer.chips),
+            seatPosition: dbPlayer.seat_position,
+            cards: dbPlayer.hole_cards ? (typeof dbPlayer.hole_cards === 'string' ? JSON.parse(dbPlayer.hole_cards) : dbPlayer.hole_cards) : [],
+            currentBet: parseFloat(dbPlayer.current_bet || 0),
+            totalBet: parseFloat(dbPlayer.total_bet_this_hand || 0),
+            isActive: !!dbPlayer.is_active,
+            hasActed: false,
+            lastAction: dbPlayer.last_action,
+            isAllIn: !!dbPlayer.is_all_in,
+            isFolded: dbPlayer.last_action === 'fold'
+          };
+          pokerTable.players.set(dbPlayer.user_id, player);
+        }
       }
 
       const player = pokerTable.players.get(userId);
@@ -788,7 +836,16 @@ class PokerGameManager {
           playingStyle: p.playing_style,
           skillLevel: p.skill_level
         })),
-        communityCards: currentGame?.community_cards ? JSON.parse(currentGame.community_cards) : [],
+        communityCards: (() => {
+          try {
+            return currentGame?.community_cards ? 
+              (typeof currentGame.community_cards === 'string' ? 
+                JSON.parse(currentGame.community_cards) : currentGame.community_cards) : [];
+          } catch (e) {
+            console.warn('Failed to parse community_cards:', currentGame?.community_cards);
+            return [];
+          }
+        })(),
         pot: currentGame ? parseFloat(currentGame.pot_amount || 0) : 0,
         currentBet: currentGame ? parseFloat(currentGame.current_bet || 0) : 0,
         minRaise: currentGame ? parseFloat(currentGame.min_raise || table.big_blind) : parseFloat(table.big_blind),
