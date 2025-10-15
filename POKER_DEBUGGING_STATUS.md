@@ -131,8 +131,13 @@ backend-1  | 👋 Removed 1 inactive human players after 10 minutes
 - Adjust cleanup criteria to not remove players who are actively playing
 - Or implement proper session management to keep active users
 
-### 3. **WebSocket Connection Instability** ❌ ONGOING
-**Symptoms**: Frequent disconnections, CORS errors, fallback to API polling.
+### 3. **WebSocket Connection Instability** ❌ CRITICAL
+**Current Error**: 
+```
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at http://localhost:5000/socket.io/?EIO=4&transport=polling&t=g9gm9zp4. (Reason: CORS request did not succeed). Status code: (null).
+```
+
+**Symptoms**: CORS errors preventing WebSocket connection, frequent disconnections, fallback to API polling.
 
 **Evidence from logs**:
 ```
@@ -140,7 +145,13 @@ backend-1  | 👋 Removed 1 inactive human players after 10 minutes
 WebSocket failed, fetching table state via API
 ```
 
-**Impact**: Real-time updates don't work, action buttons depend on API polling instead of live WebSocket events.
+**Root Cause**: Socket.IO server CORS configuration not allowing frontend origin.
+
+**Impact**: 
+- Real-time updates don't work
+- Action buttons can't send WebSocket events
+- "Player not at table" error likely caused by failed WebSocket connection
+- Depends entirely on API polling instead of live events
 
 ---
 
@@ -203,7 +214,15 @@ WebSocket failed, fetching table state via API
 
 ## 🚀 Immediate Next Steps
 
-### Priority 1: Fix "Player not at table" Error
+### Priority 1: Fix CORS Issues ✅ ATTEMPTED
+**CORS Fix Applied**:
+1. ✅ Added `FRONTEND_URL=http://localhost:3000` to `.env`
+2. ✅ Updated Express CORS config to match Socket.IO CORS
+3. ✅ Restarted backend
+
+**Next**: Test if WebSocket connection works and "Player not at table" error resolves.
+
+### Priority 2: Fix "Player not at table" Error (if CORS didn't resolve it)
 1. **Add Debug Logging**: 
    ```typescript
    // In handlePlayerAction after player loading

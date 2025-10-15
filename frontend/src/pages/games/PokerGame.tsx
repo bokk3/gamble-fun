@@ -283,10 +283,18 @@ const PokerGame: React.FC = () => {
   };
 
   const handlePlayerAction = (action: string, amount?: number) => {
-    if (!socket || !joinedTableId) return;
+    if (!socket || !joinedTableId || !user) return;
+
+    console.log('🎯 DEBUG - Sending poker action:', {
+      tableId: joinedTableId,
+      userId: user.id,
+      action,
+      amount: amount || 0
+    });
 
     socket.emit('poker:action', {
       tableId: joinedTableId,
+      userId: user.id,
       action,
       amount: amount || 0
     });

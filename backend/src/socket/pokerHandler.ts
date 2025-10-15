@@ -424,23 +424,35 @@ class PokerGameManager {
       let pokerTable = this.tables.get(tableId);
       if (!pokerTable) {
         console.log(`No poker table found in memory for table ${tableId}, initializing for action`);
-        // Initialize table if not exists (same as startNewHand)
+        
+        // Load current game state from database
+        const gameResult = await executeQuery(`
+          SELECT * FROM poker_games 
+          WHERE table_id = ? AND game_state != 'finished' 
+          ORDER BY created_at DESC LIMIT 1
+        `, [tableId]);
+        
+        const currentGame = gameResult.length > 0 ? gameResult[0] : null;
+        console.log('🔍 DEBUG - Loading game state from DB:', currentGame ? 
+          `currentPlayerPosition: ${currentGame.current_player_position}` : 'No active game');
+        
+        // Initialize table with real game state (not defaults)
         const newTable: PokerTable = {
           id: tableId,
           players: new Map(),
           spectators: new Set(),
-          gameState: null,
+          gameState: currentGame,
           deck: [],
-          communityCards: [],
-          pot: 0,
-          currentBet: 0,
-          minRaise: 0,
-          dealerPosition: 0,
-          smallBlindPosition: 1,
-          bigBlindPosition: 2,
-          currentPlayerPosition: 0,
-          bettingRound: 'pre_flop',
-          handNumber: 1
+          communityCards: currentGame?.community_cards ? JSON.parse(currentGame.community_cards) : [],
+          pot: currentGame ? parseFloat(currentGame.pot_amount) : 0,
+          currentBet: currentGame ? parseFloat(currentGame.current_bet) : 0,
+          minRaise: currentGame ? parseFloat(currentGame.min_raise) : 0,
+          dealerPosition: currentGame ? currentGame.dealer_position : 0,
+          smallBlindPosition: currentGame ? currentGame.small_blind_position : 1,
+          bigBlindPosition: currentGame ? currentGame.big_blind_position : 2,
+          currentPlayerPosition: currentGame ? currentGame.current_player_position : 0,
+          bettingRound: currentGame ? currentGame.betting_round : 'pre_flop',
+          handNumber: currentGame ? currentGame.hand_number : 1
         };
         this.tables.set(tableId, newTable);
         pokerTable = newTable;
@@ -454,10 +466,14 @@ class PokerGameManager {
           WHERE ps.table_id = ? AND ps.is_active = true
         `, [tableId]);
         
+        console.log('🔍 DEBUG - DB players found:', dbPlayers.length);
+        console.log('🔍 DEBUG - DB player user_ids:', dbPlayers.map(p => ({ user_id: p.user_id, username: p.username || p.ai_name })));
+        
         // Add players to memory table
         for (const dbPlayer of dbPlayers) {
           const player: PokerPlayer = {
             id: dbPlayer.user_id,
+            userId: dbPlayer.user_id,  // Add userId property for turn validation
             socketId: dbPlayer.user_id > 0 ? socket.id : null,
             username: dbPlayer.username || dbPlayer.ai_name,
             chips: parseFloat(dbPlayer.chips),
@@ -475,20 +491,37 @@ class PokerGameManager {
         }
       }
 
+      // DEBUG: Log what players are in memory
+      console.log('🔍 DEBUG - Players in memory:', Array.from(pokerTable.players.keys()));
+      console.log('🔍 DEBUG - Looking for userId:', userId);
+      console.log('🔍 DEBUG - userId type:', typeof userId);
+      console.log('🔍 DEBUG - Player exists in memory:', pokerTable.players.has(userId));
+
       const player = pokerTable.players.get(userId);
       if (!player) {
+        console.log('❌ DEBUG - Player not found in memory');
         socket.emit('poker:error', { message: 'Player not at table' });
         return;
       }
+      console.log('✅ DEBUG - Player found:', player.username);
 
       // Validate it's player's turn
+      console.log('🔍 DEBUG - Turn validation:');
+      console.log('  - Memory currentPlayerPosition:', pokerTable.currentPlayerPosition);
+      console.log('  - User seatPosition:', player.seatPosition);
+      console.log('  - User userId:', userId);
+      
       const currentPlayer = Array.from(pokerTable.players.values())
         .find(p => p.seatPosition === pokerTable.currentPlayerPosition);
+      
+      console.log('  - Found current player:', currentPlayer ? `${currentPlayer.username} (userId: ${currentPlayer.userId})` : 'null');
 
       if (!currentPlayer || currentPlayer.userId !== userId) {
+        console.log('❌ DEBUG - Turn validation failed');
         socket.emit('poker:error', { message: 'Not your turn' });
         return;
       }
+      console.log('✅ DEBUG - Turn validation passed');
 
       // Validate action
       const validation = validatePlayerAction(
